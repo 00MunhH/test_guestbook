@@ -31,7 +31,9 @@
     li.entry .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     li.entry .meta img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
     li.entry .meta .name { font-weight: 600; font-size: 14px; }
+    li.entry .meta .joined { color: #aaa; font-size: 12px; }
     li.entry .meta .time { color: #999; font-size: 12px; margin-left: auto; }
+    .user .joined { color: #999; font-weight: 400; font-size: 12px; }
     li.entry .msg { white-space: pre-wrap; line-height: 1.5; }
     .empty { color: #999; text-align: center; padding: 32px 0; }
   </style>
@@ -42,7 +44,7 @@
     <div class="user">
       {% if user %}
         {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="프로필" />{% endif %}
-        <span>{{ user.nickname }}님</span>
+        <span>{{ user.nickname }}님 <small class="joined">(가입일 {{ user.created_at.strftime("%Y-%m-%d") }})</small></span>
         <a class="btn btn-ghost" href="/auth/logout">로그아웃</a>
       {% else %}
         <a class="btn btn-kakao" href="/auth/kakao/login">카카오 로그인</a>
@@ -69,6 +71,7 @@
         <div class="meta">
           {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
           <span class="name">{{ entry.author.nickname }}</span>
+          <span class="joined">가입일 {{ entry.author.created_at.strftime("%Y-%m-%d") }}</span>
           <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
         </div>
         <div class="msg">{{ entry.message }}</div>
