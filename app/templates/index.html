@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>방명록</title>
+  <style>
+    :root { --kakao: #fee500; --kakao-text: #191600; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      max-width: 720px; margin: 0 auto; padding: 24px; color: #222; background: #fafafa;
+    }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    h1 { font-size: 24px; margin: 0; }
+    .user { display: flex; align-items: center; gap: 10px; }
+    .user img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #ddd; }
+    .btn {
+      display: inline-block; padding: 8px 14px; border-radius: 8px; text-decoration: none;
+      font-size: 14px; border: none; cursor: pointer;
+    }
+    .btn-kakao { background: var(--kakao); color: var(--kakao-text); font-weight: 600; }
+    .btn-ghost { background: #eee; color: #333; }
+    form.write { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; }
+    form.write textarea { width: 100%; min-height: 80px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 15px; resize: vertical; }
+    form.write .actions { text-align: right; margin-top: 10px; }
+    .btn-primary { background: #191600; color: #fff; }
+    .login-note { background: #fff; padding: 16px; border-radius: 12px; text-align: center; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    ul.entries { list-style: none; padding: 0; margin: 0; }
+    li.entry { background: #fff; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    li.entry .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    li.entry .meta img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
+    li.entry .meta .name { font-weight: 600; font-size: 14px; }
+    li.entry .meta .time { color: #999; font-size: 12px; margin-left: auto; }
+    li.entry .msg { white-space: pre-wrap; line-height: 1.5; }
+    .empty { color: #999; text-align: center; padding: 32px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📖 방명록</h1>
+    <div class="user">
+      {% if user %}
+        {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="프로필" />{% endif %}
+        <span>{{ user.nickname }}님</span>
+        <a class="btn btn-ghost" href="/auth/logout">로그아웃</a>
+      {% else %}
+        <a class="btn btn-kakao" href="/auth/kakao/login">카카오 로그인</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if user %}
+    <form class="write" action="/entries" method="post">
+      <textarea name="message" placeholder="방명록을 남겨보세요..." required></textarea>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">등록</button>
+      </div>
+    </form>
+  {% else %}
+    <div class="login-note">
+      방명록을 남기려면 <a href="/auth/kakao/login">카카오 로그인</a>이 필요합니다. (조회는 누구나 가능합니다)
+    </div>
+  {% endif %}
+
+  <ul class="entries">
+    {% for entry in entries %}
+      <li class="entry">
+        <div class="meta">
+          {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
+          <span class="name">{{ entry.author.nickname }}</span>
+          <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+        </div>
+        <div class="msg">{{ entry.message }}</div>
+      </li>
+    {% else %}
+      <li class="empty">아직 등록된 방명록이 없습니다.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>
