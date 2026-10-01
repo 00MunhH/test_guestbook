@@ -13,6 +13,7 @@
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
     h1 { font-size: 22px; margin: 0; }
     a { color: #3b5bdb; text-decoration: none; }
+    .back-link { font-weight: 600; font-size: 15px; }
     .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 12px 14px; text-align: left; font-size: 14px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
@@ -36,9 +37,7 @@
 <body>
   <header>
     <h1>회원 관리 <span class="count">({{ members | length }}명)</span></h1>
-    <nav>
-      <a href="/">← 방명록</a> · <a href="/me">내 정보</a> · <a href="/auth/logout">로그아웃</a>
-    </nav>
+    <nav><a href="/" class="back-link">← YJ</a></nav>
   </header>
 
   <div class="card">

@@ -40,6 +40,12 @@
     .notif-badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 11px; text-align: center; }
     .comment.new-comment { animation: flash 1.2s ease; }
     @keyframes flash { from { background: #fff3bf; } to { background: transparent; } }
+    .comment.focus-flash { animation: focusflash 1.6s ease; border-radius: 8px; }
+    @keyframes focusflash {
+      0%, 100% { background: transparent; }
+      15%, 55% { background: #ffe066; }
+      35% { background: transparent; }
+    }
     .reply-list { margin-top: 8px; padding-left: 14px; border-left: 2px solid #f0f0f0; }
     .comment.reply { margin-bottom: 6px; }
     .reply-toggle { background: none; border: none; color: #868e96; font-size: 12px; cursor: pointer; padding: 2px 0; margin-top: 4px; }
@@ -153,7 +159,7 @@
           <h4>댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comment_total }}</span></h4>
           <div class="comment-list" data-entry="{{ entry.id }}">
           {% for c in entry.top_comments %}
-            <div class="comment" data-comment="{{ c.id }}">
+            <div class="comment" id="comment-{{ c.id }}" data-comment="{{ c.id }}">
               {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
               <div class="body">
                 <span class="cname">{{ c.author.shown_name }}</span>
@@ -163,7 +169,7 @@
                 <!-- 대댓글(답글) 목록 -->
                 <div class="reply-list" data-parent="{{ c.id }}">
                   {% for r in c.replies %}
-                    <div class="comment reply" data-comment="{{ r.id }}">
+                    <div class="comment reply" id="comment-{{ r.id }}" data-comment="{{ r.id }}">
                       {% if r.author.profile_image %}<img src="{{ r.author.profile_image }}" alt="프로필" />{% endif %}
                       <div class="body">
                         <span class="cname">{{ r.author.shown_name }}</span>
@@ -246,7 +252,10 @@
 
         var wrap = document.createElement("div");
         wrap.className = "comment new-comment" + (ev.parent_id ? " reply" : "");
-        if (ev.comment_id) wrap.setAttribute("data-comment", ev.comment_id);
+        if (ev.comment_id) {
+          wrap.setAttribute("data-comment", ev.comment_id);
+          wrap.id = "comment-" + ev.comment_id;
+        }
         var img = ev.author_image
           ? '<img src="' + escapeHtml(ev.author_image) + '" alt="프로필" />' : "";
         wrap.innerHTML =
@@ -270,6 +279,26 @@
         var form = document.getElementById(btn.getAttribute("data-target"));
         if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
       });
+
+      // 알림에서 넘어온 경우(?focus=<id> 또는 #comment-<id>) 해당 댓글 강조
+      function highlightTarget() {
+        var id = null;
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("focus")) {
+          id = params.get("focus");
+        } else if (window.location.hash.indexOf("#comment-") === 0) {
+          id = window.location.hash.slice("#comment-".length);
+        }
+        if (!id) return;
+        var el = document.getElementById("comment-" + id);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.remove("focus-flash");
+        void el.offsetWidth;  // reflow로 애니메이션 재시작 보장
+        el.classList.add("focus-flash");
+        setTimeout(function () { el.classList.remove("focus-flash"); }, 1800);
+      }
+      highlightTarget();
 
       function bumpBadge(ev) {
         // 내 글에 달린 (내가 쓰지 않은) 댓글이면 알림 뱃지 갱신

@@ -13,6 +13,7 @@
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
     h1 { font-size: 22px; margin: 0; }
     a { color: #3b5bdb; text-decoration: none; }
+    .back-link { font-weight: 600; font-size: 15px; }
     .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     .profile { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
     .profile img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #ddd; }
@@ -34,11 +35,7 @@
 <body>
   <header>
     <h1>내 정보</h1>
-    <nav>
-      <a href="/">← 방명록</a>
-      {% if user.is_admin %} · <a href="/admin">관리자</a>{% endif %}
-      · <a href="/auth/logout">로그아웃</a>
-    </nav>
+    <nav><a href="/" class="back-link">← YJ</a></nav>
   </header>
 
   <div class="card">
