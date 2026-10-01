@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY app ./app
 
+# 마이그레이션 스크립트 복사 (기존 DB 업그레이드용)
+COPY migrate_v4.py .
+
 # SQLite DB가 저장될 디렉터리 (볼륨 마운트 지점)
 RUN mkdir -p /data
 ENV DATABASE_URL=sqlite:////data/guestbook.db

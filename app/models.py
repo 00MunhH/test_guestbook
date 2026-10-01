@@ -1,7 +1,7 @@
 """ORM 모델 정의: 사용자, 방명록 항목, 반응, 댓글."""
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -24,11 +24,21 @@ class User(Base):
     kakao_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     nickname: Mapped[str] = mapped_column(String(128), default="")
     profile_image: Mapped[str] = mapped_column(String(512), default="")
+    # 사용자가 직접 등록/변경하는 정보
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    bio: Mapped[str] = mapped_column(Text, default="")
+    # 관리자 여부
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     entries: Mapped[list["GuestbookEntry"]] = relationship(
         back_populates="author", cascade="all, delete-orphan"
     )
+
+    @property
+    def shown_name(self) -> str:
+        """표시 이름: display_name이 있으면 우선, 없으면 닉네임."""
+        return self.display_name or self.nickname
 
 
 class GuestbookEntry(Base):

@@ -1,6 +1,6 @@
 # 카카오 로그인 방명록 (FastAPI + SQLite)
 
-![version](https://img.shields.io/badge/version-v3.0-blue)
+![version](https://img.shields.io/badge/version-v4.0-blue)
 
 카카오 OAuth 2.0 로그인 기반의 방명록 웹 서비스입니다.
 
@@ -10,7 +10,7 @@
 
 ## 버전 관리
 
-현재 버전: **v3.0**
+현재 버전: **v4.0**
 
 ### 기본 기능 (v1.0)
 
@@ -26,8 +26,11 @@
 | **v1.0** | 카카오 로그인, 방명록 작성/조회 | 최초 릴리스 |
 | **v2.0** | 게시글 **반응**(👍 좋아요 / 👎 싫어요 / 🙏 감사해요), **댓글** 작성/삭제, **Docker 배포** 지원(Dockerfile, docker-compose) 및 EC2 배포 가이드 | 반응은 사용자당 글마다 1개(토글), 댓글 삭제는 본인만 |
 | **v3.0** | 본인이 작성한 **게시글 삭제** 기능 (글 삭제 시 해당 글의 반응·댓글도 함께 삭제) | 작성자 본인만 삭제 가능 |
+| **v4.0** | **내 정보 등록/변경**(표시 이름, 자기소개), **관리자 페이지**(회원 목록/삭제), **관리자 권한 부여·해제** | 최초 관리자는 `.env`의 `ADMIN_KAKAO_IDS`로 지정 |
 
 > 참고: 댓글 삭제(본인만)는 v2.0부터 제공됩니다. v3.0에서는 게시글 자체의 삭제가 추가되었습니다.
+
+> **v4.0 업그레이드 시 주의**: `users` 테이블에 컬럼이 추가되어, 기존 DB를 사용 중이라면 마이그레이션이 필요합니다. 아래 [8. 기존 DB 업그레이드](#8-기존-db-업그레이드-v4-마이그레이션) 참고.
 
 ## 기술 스택
 
@@ -96,12 +99,15 @@ KAKAO_CLIENT_SECRET=사용_시_입력_아니면_비움
 KAKAO_REDIRECT_URI=http://localhost:8000/auth/kakao/callback
 SESSION_SECRET_KEY=임의의_긴_랜덤_문자열
 DATABASE_URL=sqlite:///./guestbook.db
+ADMIN_KAKAO_IDS=카카오ID1,카카오ID2
 ```
 
 - `SESSION_SECRET_KEY`는 아래 명령으로 랜덤 값을 생성할 수 있습니다.
   ```powershell
   python -c "import secrets; print(secrets.token_urlsafe(48))"
   ```
+- `ADMIN_KAKAO_IDS`는 **최초 관리자**로 지정할 카카오 사용자 ID입니다. 쉼표로 여러 명 지정할 수 있으며, 비워두면 관리자가 없습니다. 여기 적힌 ID로 로그인하면 자동으로 관리자 권한이 부여됩니다. 이후에는 관리자 페이지에서 다른 회원을 관리자로 지정할 수 있습니다.
+  - 본인의 카카오 ID는 한 번 로그인한 뒤 DB의 `users.kakao_id` 값에서 확인하거나, 카카오 로그인 사용자 정보(`id`)로 알 수 있습니다.
 
 ## 4. 실행
 
@@ -119,7 +125,16 @@ uvicorn app.main:app --reload
 - 각 글에 **좋아요 👍 / 싫어요 👎 / 감사해요 🙏** 반응을 남길 수 있습니다. 같은 반응을 다시 누르면 취소되고, 다른 반응을 누르면 변경됩니다(사용자당 글마다 1개).
 - 각 글에 **댓글**을 작성할 수 있으며, 본인이 작성한 댓글은 삭제할 수 있습니다.
 - 본인이 작성한 **게시글**은 삭제할 수 있습니다. (글을 삭제하면 그 글의 댓글과 반응도 함께 삭제됩니다)
+- 상단 **내 정보**에서 표시 이름과 자기소개를 등록/변경할 수 있습니다. 표시 이름을 지정하면 방명록에 카카오 닉네임 대신 표시됩니다.
+- 관리자는 상단 **관리자** 메뉴에서 회원 목록을 보고, 회원을 삭제하거나 다른 회원에게 관리자 권한을 부여/해제할 수 있습니다.
 - 로그인하지 않아도 방명록 목록, 반응 수, 댓글은 모두 볼 수 있습니다. (작성/반응만 로그인 필요)
+
+### 관리자 지정 방법
+
+1. `.env`의 `ADMIN_KAKAO_IDS`에 최초 관리자의 카카오 ID를 적습니다.
+2. 해당 계정으로 카카오 로그인하면 자동으로 관리자가 됩니다.
+3. 상단 **관리자** 메뉴 → 회원 목록에서 다른 회원의 **관리자 지정** 버튼으로 권한을 부여할 수 있습니다.
+   - 본인의 관리자 권한 해제와 본인 계정 삭제는 안전을 위해 차단되어 있습니다.
 
 ## API 엔드포인트
 
@@ -134,6 +149,11 @@ uvicorn app.main:app --reload
 | POST   | `/entries/{id}/react`    | 반응 토글(좋아요/싫어요/감사해요) | **필요** |
 | POST   | `/entries/{id}/comments` | 댓글 작성               | **필요** |
 | POST   | `/comments/{id}/delete`  | 댓글 삭제(본인만)       | **필요** |
+| GET    | `/me`                    | 내 정보 페이지          | **필요** |
+| POST   | `/me`                    | 내 정보 등록/변경       | **필요** |
+| GET    | `/admin`                 | 관리자 회원 관리 페이지 | **관리자** |
+| POST   | `/admin/members/{id}/role`   | 관리자 권한 부여/해제 | **관리자** |
+| POST   | `/admin/members/{id}/delete` | 회원 삭제           | **관리자** |
 | GET    | `/auth/kakao/login`      | 카카오 로그인 시작      | 불필요   |
 | GET    | `/auth/kakao/callback`   | 카카오 OAuth 콜백       | 불필요   |
 | GET    | `/auth/logout`           | 로그아웃                | 불필요   |
@@ -251,6 +271,33 @@ docker compose up -d --build   # 또는 docker build 후 run 재실행
 > 데이터 보존: SQLite DB는 `guestbook_data` 볼륨(컨테이너 내부 `/data`)에 저장되어 컨테이너를 재생성해도 유지됩니다.
 
 > HTTPS/도메인: 운영에서는 Nginx 리버스 프록시 + Let's Encrypt로 443 포트에 HTTPS를 구성하고, 카카오 Redirect URI도 `https://도메인/...` 형태로 등록하는 것을 권장합니다.
+
+## 8. 기존 DB 업그레이드 (v4 마이그레이션)
+
+v4.0에서 `users` 테이블에 `display_name`, `bio`, `is_admin` 컬럼이 추가되었습니다. **v3.0 이하에서 쓰던 DB가 이미 있다면** 아래 스크립트로 컬럼을 추가해야 합니다. (신규로 시작하는 경우에는 자동 생성되므로 불필요합니다.)
+
+**로컬**
+
+```powershell
+python migrate_v4.py
+```
+
+**Docker(EC2) 환경** — 컨테이너 내부의 DB(`/data/guestbook.db`)에 적용합니다.
+
+```bash
+git pull origin main
+
+# 컨테이너 안에서 마이그레이션 실행 (이미지에 migrate_v4.py가 없다면 아래 "대안" 참고)
+docker compose run --rm -e DATABASE_URL=sqlite:////data/guestbook.db web python migrate_v4.py
+
+# 재배포
+docker compose up -d --build
+```
+
+- 스크립트는 이미 컬럼이 있으면 "변경 없음"을 출력하므로 여러 번 실행해도 안전합니다.
+- 마이그레이션 없이 실행하면 로그인/조회 시 `no such column: users.is_admin` 류의 오류가 발생합니다.
+
+> 대안: 테스트 단계라 데이터가 중요하지 않다면, 볼륨을 비우고(`docker compose down` 후 볼륨 삭제) 새로 시작하면 최신 스키마로 자동 생성됩니다. 단, 기존 방명록 데이터는 사라집니다.
 
 ## 참고
 

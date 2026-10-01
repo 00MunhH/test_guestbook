@@ -76,7 +76,9 @@
     <div class="user">
       {% if user %}
         {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="프로필" />{% endif %}
-        <span>{{ user.nickname }}님 <small class="joined">(가입일 {{ user.created_at.strftime("%Y-%m-%d") }})</small></span>
+        <span>{{ user.shown_name }}님 <small class="joined">(가입일 {{ user.created_at.strftime("%Y-%m-%d") }})</small></span>
+        <a class="btn btn-ghost" href="/me">내 정보</a>
+        {% if user.is_admin %}<a class="btn btn-ghost" href="/admin">관리자</a>{% endif %}
         <a class="btn btn-ghost" href="/auth/logout">로그아웃</a>
       {% else %}
         <a class="btn btn-kakao" href="/auth/kakao/login">카카오 로그인</a>

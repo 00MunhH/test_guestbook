@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, guestbook
+from . import account, auth, guestbook
 from .auth import get_current_user
 from .config import settings
 from .database import get_db, init_db
@@ -34,6 +34,7 @@ app.add_middleware(SessionMiddleware, secret_key=settings.session_secret_key)
 # 라우터 등록
 app.include_router(auth.router)
 app.include_router(guestbook.router)
+app.include_router(account.router)
 
 
 @app.get("/", response_class=HTMLResponse)

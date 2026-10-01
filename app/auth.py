@@ -39,6 +39,18 @@ def require_user(
     return user
 
 
+def require_admin(
+    user: User = Depends(require_user),
+) -> User:
+    """관리자 필수 의존성. 비관리자 시 403."""
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다.",
+        )
+    return user
+
+
 @router.get("/kakao/login")
 def kakao_login(request: Request) -> RedirectResponse:
     """카카오 인가 코드 요청 페이지로 리다이렉트."""
@@ -117,17 +129,22 @@ async def kakao_callback(
     profile_image = profile.get("profile_image_url") or ""
 
     # 3) 사용자 upsert
+    is_bootstrap_admin = kakao_id in settings.admin_kakao_id_set
     user = db.scalar(select(User).where(User.kakao_id == kakao_id))
     if user is None:
         user = User(
             kakao_id=kakao_id,
             nickname=nickname,
             profile_image=profile_image,
+            is_admin=is_bootstrap_admin,
         )
         db.add(user)
     else:
         user.nickname = nickname
         user.profile_image = profile_image
+        # .env에 지정된 관리자는 로그인 시 자동 승격 (강등은 하지 않음)
+        if is_bootstrap_admin:
+            user.is_admin = True
     db.commit()
     db.refresh(user)
 

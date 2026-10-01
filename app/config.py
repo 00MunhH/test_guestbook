@@ -16,11 +16,19 @@ class Settings(BaseSettings):
     # 데이터베이스
     database_url: str = "sqlite:///./guestbook.db"
 
+    # 최초 관리자로 부트스트랩할 카카오 ID 목록 (쉼표 구분)
+    admin_kakao_ids: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def admin_kakao_id_set(self) -> set[str]:
+        """ADMIN_KAKAO_IDS를 파싱한 집합."""
+        return {x.strip() for x in self.admin_kakao_ids.split(",") if x.strip()}
 
 
 settings = Settings()
