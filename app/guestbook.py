@@ -115,6 +115,30 @@ def delete_entry(
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.post("/entries/{entry_id}/edit")
+def edit_entry(
+    request: Request,
+    entry_id: int,
+    message: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """게시글 수정 (본인 글만)."""
+    entry = db.get(GuestbookEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
+    if entry.author_id != user.id:
+        raise HTTPException(status_code=403, detail="본인 글만 수정할 수 있습니다.")
+    text = message.strip()
+    if text:
+        entry.message = text
+        db.commit()
+        db.refresh(entry)
+    if _wants_json(request):
+        return JSONResponse({"id": entry.id, "message": entry.message})
+    return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # 반응 타입 → 한글 라벨 (알림 메시지용)
 REACTION_LABELS = {"like": "좋아요", "dislike": "싫어요", "thanks": "감사해요"}
 
@@ -233,12 +257,13 @@ def react_comment(
 # ----- 댓글 / 대댓글 -----
 @router.post("/entries/{entry_id}/comments")
 async def create_comment(
+    request: Request,
     entry_id: int,
     message: str = Form(...),
     parent_id: int | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
-) -> RedirectResponse:
+):
     """댓글/대댓글 작성 (로그인 필요).
 
     - parent_id가 없으면 최상위 댓글 → 글 작성자에게 알림
@@ -261,6 +286,8 @@ async def create_comment(
 
     text = message.strip()
     if not text:
+        if _wants_json(request):
+            return JSONResponse({"error": "empty"}, status_code=400)
         return RedirectResponse(
             url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER
         )
@@ -300,20 +327,52 @@ async def create_comment(
         db.commit()
 
     # 실시간 브로드캐스트
-    await broker.publish(
-        {
-            "type": "comment",
-            "entry_id": entry_id,
-            "comment_id": comment.id,
-            "parent_id": parent.id if parent else None,
-            "author": author_name,
-            "author_image": user.profile_image,
-            "message": text,
-            "created_at": to_kst(comment.created_at),
-            "target_user_id": target_id if target_id != user.id else None,
-        }
-    )
+    payload = {
+        "type": "comment",
+        "entry_id": entry_id,
+        "comment_id": comment.id,
+        "parent_id": parent.id if parent else None,
+        "author": author_name,
+        "author_image": user.profile_image,
+        "message": text,
+        "created_at": to_kst(comment.created_at),
+        "target_user_id": target_id if target_id != user.id else None,
+    }
+    await broker.publish(payload)
+
+    if _wants_json(request):
+        # 작성자 본인 화면에서 바로 삽입할 수 있도록 데이터 반환
+        data = dict(payload)
+        data["is_mine"] = True
+        data["author_id"] = user.id
+        return JSONResponse(data)
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/comments/{comment_id}/edit")
+def edit_comment(
+    request: Request,
+    comment_id: int,
+    message: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """댓글/대댓글 수정 (본인만)."""
+    comment = db.get(Comment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    if comment.author_id != user.id:
+        raise HTTPException(status_code=403, detail="본인 댓글만 수정할 수 있습니다.")
+    text = message.strip()
+    if text:
+        comment.message = text
+        db.commit()
+        db.refresh(comment)
+    if _wants_json(request):
+        return JSONResponse({"id": comment.id, "message": comment.message})
+    return RedirectResponse(
+        url=f"/#comment-{comment_id}", status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
 @router.post("/comments/{comment_id}/delete")

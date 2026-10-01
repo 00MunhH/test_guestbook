@@ -15,10 +15,15 @@
   li.entry .meta .name { font-weight: 600; font-size: 14px; }
   li.entry .meta .time { color: #999; font-size: 12px; margin-left: auto; }
   li.entry .meta form { margin: 0; }
-  li.entry .meta .entry-del { background: none; border: none; color: #c33; font-size: 12px; cursor: pointer; padding: 0; }
-  li.entry .meta .entry-del:hover { text-decoration: underline; }
+  .lnk { background: none; border: none; font-size: 12px; cursor: pointer; padding: 0; }
+  .lnk.del { color: #c33; } .lnk.edit { color: #3b5bdb; }
+  .lnk:hover { text-decoration: underline; }
   li.entry .msg { white-space: pre-wrap; line-height: 1.5; word-break: break-word; }
   .empty { color: #999; text-align: center; padding: 32px 0; }
+
+  .edit-form { margin-top: 8px; }
+  .edit-form textarea, .edit-form input[type=text] { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .edit-form .actions { margin-top: 6px; display: flex; gap: 6px; }
 
   .comment.new-comment { animation: flash 1.2s ease; }
   @keyframes flash { from { background: #fff3bf; } to { background: transparent; } }
@@ -26,8 +31,8 @@
   @keyframes focusflash { 0%,100% { background: transparent; } 15%,55% { background: #ffe066; } 35% { background: transparent; } }
   .reply-list { margin-top: 8px; padding-left: 14px; border-left: 2px solid #f0f0f0; }
   .comment.reply { margin-bottom: 6px; }
-  .reply-toggle { background: none; border: none; color: #868e96; font-size: 12px; cursor: pointer; padding: 2px 0; margin-top: 4px; }
-  .reply-toggle:hover { text-decoration: underline; }
+  .reply-toggle, .replies-toggle { background: none; border: none; color: #868e96; font-size: 12px; cursor: pointer; padding: 2px 0; margin-top: 4px; }
+  .reply-toggle:hover, .replies-toggle:hover { text-decoration: underline; }
   .reply-form { margin-top: 8px; }
 
   .reactions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
@@ -42,24 +47,36 @@
   .creactions .react-btn { padding: 3px 8px; font-size: 12px; }
 
   .comments { margin-top: 14px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
-  .comments h4 { font-size: 13px; color: #888; margin: 0 0 8px; }
+  .comments h4 { font-size: 13px; color: #888; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .comments-toggle { background: #f1f3f5; border: none; border-radius: 6px; font-size: 12px; color: #555; cursor: pointer; padding: 3px 8px; }
   .comment { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
   .comment img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
   .comment .body { flex: 1; min-width: 0; }
   .comment .cname { font-weight: 600; font-size: 13px; }
   .comment .ctime { color: #aaa; font-size: 11px; margin-left: 6px; }
   .comment .cmsg { font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-  .comment .cdel { background: none; border: none; color: #c33; font-size: 12px; cursor: pointer; padding: 0; }
+  .comment-actions { display: flex; gap: 8px; margin-top: 2px; }
   .comment-form { display: flex; gap: 8px; margin-top: 10px; }
   .comment-form input[type=text] { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
   .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .btn-ghost-sm { padding: 6px 10px; font-size: 13px; background: #eee; color: #333; border: none; border-radius: 8px; cursor: pointer; }
   .muted { color: #aaa; font-size: 13px; }
+
+  /* 페이지네이션 */
+  .pagination { display: flex; justify-content: center; gap: 6px; margin: 20px 0 60px; flex-wrap: wrap; }
+  .pagination a, .pagination span { padding: 7px 12px; border-radius: 8px; font-size: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); color: #333; }
+  .pagination .cur { background: var(--accent); color: #fff; font-weight: 700; }
+  .pagination .disabled { color: #ccc; }
+
+  /* 플로팅 글쓰기/맨위 버튼 */
+  .fab { position: fixed; right: 20px; bottom: 20px; z-index: 35; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,.25); display: none; }
+  .fab.show { display: block; }
 </style>
 {% endblock %}
 
 {% block content %}
   {% if user %}
-    <form class="write" action="/entries" method="post">
+    <form class="write" id="write-form" action="/entries" method="post">
       <textarea name="message" placeholder="방명록을 남겨보세요..." required></textarea>
       <div class="actions">
         <button class="btn btn-primary" type="submit">등록</button>
@@ -73,7 +90,6 @@
 
   {% set reaction_labels = [("like", "👍", "좋아요"), ("dislike", "👎", "싫어요"), ("thanks", "🙏", "감사해요")] %}
 
-  {# 반응 버튼 묶음 매크로: target_type은 'entries'(글) 또는 'comments'(댓글) #}
   {% macro reaction_bar(obj, target_type, obj_id) %}
     {% set counts = obj.reaction_counts() %}
     {% set my_reaction = obj.user_reaction(user.id) if user else None %}
@@ -101,6 +117,36 @@
     </div>
   {% endmacro %}
 
+  {# 댓글/대댓글 공용 렌더 매크로 #}
+  {% macro comment_block(c, is_reply) %}
+    <div class="comment {% if is_reply %}reply{% endif %}" id="comment-{{ c.id }}" data-comment="{{ c.id }}">
+      {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
+      <div class="body">
+        <span class="cname">{{ c.author.shown_name }}</span>
+        <span class="ctime">{{ c.created_at | kst }}</span>
+        <div class="cmsg">{{ c.message }}</div>
+        {% if user and c.author_id == user.id %}
+          <form class="edit-form comment-edit" style="display:none" action="/comments/{{ c.id }}/edit" method="post">
+            <input type="text" name="message" value="{{ c.message }}" required />
+            <div class="actions">
+              <button class="btn btn-primary btn-sm" type="submit">저장</button>
+              <button type="button" class="btn-ghost-sm edit-cancel">취소</button>
+            </div>
+          </form>
+        {% endif %}
+        <div class="creactions">{{ reaction_bar(c, 'comments', c.id) }}</div>
+        {% if user and c.author_id == user.id %}
+          <div class="comment-actions">
+            <button type="button" class="lnk edit edit-toggle">수정</button>
+            <form action="/comments/{{ c.id }}/delete" method="post" onsubmit="return confirm('댓글을 삭제할까요?');">
+              <button class="lnk del" type="submit">삭제</button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endmacro %}
+
   <ul class="entries">
     {% for entry in entries %}
       <li class="entry" id="entry-{{ entry.id }}">
@@ -109,69 +155,64 @@
           <span class="name">{{ entry.author.shown_name }}</span>
           <span class="time">{{ entry.created_at | kst }}</span>
           {% if user and entry.author_id == user.id %}
+            <button type="button" class="lnk edit entry-edit-toggle">수정</button>
             <form action="/entries/{{ entry.id }}/delete" method="post" onsubmit="return confirm('이 글을 삭제할까요? 댓글과 반응도 함께 삭제됩니다.');">
-              <button class="entry-del" type="submit">삭제</button>
+              <button class="lnk del" type="submit">삭제</button>
             </form>
           {% endif %}
         </div>
         <div class="msg">{{ entry.message }}</div>
+        {% if user and entry.author_id == user.id %}
+          <form class="edit-form entry-edit" style="display:none" action="/entries/{{ entry.id }}/edit" method="post">
+            <textarea name="message" required>{{ entry.message }}</textarea>
+            <div class="actions">
+              <button class="btn btn-primary btn-sm" type="submit">저장</button>
+              <button type="button" class="btn-ghost-sm edit-cancel">취소</button>
+            </div>
+          </form>
+        {% endif %}
 
-        <!-- 글 반응 -->
         {{ reaction_bar(entry, 'entries', entry.id) }}
 
         <!-- 댓글 -->
         <div class="comments">
-          <h4>댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comment_total }}</span></h4>
+          <h4>
+            댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comment_total }}</span>
+            {% if entry.top_comments %}
+              <button type="button" class="comments-toggle" data-entry="{{ entry.id }}">접기</button>
+            {% endif %}
+          </h4>
           <div class="comment-list" data-entry="{{ entry.id }}">
           {% for c in entry.top_comments %}
-            <div class="comment" id="comment-{{ c.id }}" data-comment="{{ c.id }}">
-              {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
-              <div class="body">
-                <span class="cname">{{ c.author.shown_name }}</span>
-                <span class="ctime">{{ c.created_at | kst }}</span>
-                <div class="cmsg">{{ c.message }}</div>
-                <div class="creactions">{{ reaction_bar(c, 'comments', c.id) }}</div>
-
-                <div class="reply-list" data-parent="{{ c.id }}">
+            <div class="comment-thread">
+              {{ comment_block(c, false) }}
+              <div class="reply-wrap" style="padding-left: 32px;">
+                {% if c.replies %}
+                  <button type="button" class="replies-toggle" data-parent="{{ c.id }}">
+                    답글 {{ c.replies | length }}개 보기
+                  </button>
+                {% endif %}
+                <div class="reply-list" data-parent="{{ c.id }}" style="display:none">
                   {% for r in c.replies %}
-                    <div class="comment reply" id="comment-{{ r.id }}" data-comment="{{ r.id }}">
-                      {% if r.author.profile_image %}<img src="{{ r.author.profile_image }}" alt="프로필" />{% endif %}
-                      <div class="body">
-                        <span class="cname">{{ r.author.shown_name }}</span>
-                        <span class="ctime">{{ r.created_at | kst }}</span>
-                        <div class="cmsg">{{ r.message }}</div>
-                        <div class="creactions">{{ reaction_bar(r, 'comments', r.id) }}</div>
-                      </div>
-                      {% if user and r.author_id == user.id %}
-                        <form action="/comments/{{ r.id }}/delete" method="post">
-                          <button class="cdel" type="submit">삭제</button>
-                        </form>
-                      {% endif %}
-                    </div>
+                    {{ comment_block(r, true) }}
                   {% endfor %}
                 </div>
-
                 {% if user %}
-                  <button type="button" class="reply-toggle" data-target="reply-form-{{ c.id }}">답글</button>
-                  <form class="reply-form comment-form" id="reply-form-{{ c.id }}" style="display:none"
-                        action="/entries/{{ entry.id }}/comments" method="post">
+                  <button type="button" class="reply-toggle" data-target="reply-form-{{ c.id }}">답글 달기</button>
+                  <form class="reply-form comment-form comment-create" id="reply-form-{{ c.id }}" style="display:none"
+                        action="/entries/{{ entry.id }}/comments" method="post" data-parent="{{ c.id }}">
                     <input type="hidden" name="parent_id" value="{{ c.id }}" />
                     <input type="text" name="message" placeholder="답글을 입력하세요..." required />
                     <button class="btn btn-primary btn-sm" type="submit">답글</button>
                   </form>
                 {% endif %}
               </div>
-              {% if user and c.author_id == user.id %}
-                <form action="/comments/{{ c.id }}/delete" method="post">
-                  <button class="cdel" type="submit">삭제</button>
-                </form>
-              {% endif %}
             </div>
           {% endfor %}
           </div>
 
           {% if user %}
-            <form class="comment-form" action="/entries/{{ entry.id }}/comments" method="post">
+            <form class="comment-form comment-create" action="/entries/{{ entry.id }}/comments" method="post">
               <input type="text" name="message" placeholder="댓글을 입력하세요..." required />
               <button class="btn btn-primary btn-sm" type="submit">댓글</button>
             </form>
@@ -184,6 +225,18 @@
       <li class="empty">아직 등록된 방명록이 없습니다.</li>
     {% endfor %}
   </ul>
+
+  {% if total_pages > 1 %}
+  <nav class="pagination">
+    {% if page > 1 %}<a href="/?page={{ page - 1 }}">← 이전</a>{% else %}<span class="disabled">← 이전</span>{% endif %}
+    {% for p in range(1, total_pages + 1) %}
+      {% if p == page %}<span class="cur">{{ p }}</span>{% else %}<a href="/?page={{ p }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    {% if page < total_pages %}<a href="/?page={{ page + 1 }}">다음 →</a>{% else %}<span class="disabled">다음 →</span>{% endif %}
+  </nav>
+  {% endif %}
+
+  {% if user %}<button class="fab" id="fab" title="글쓰기">✎</button>{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -198,24 +251,13 @@
       return d.innerHTML;
     }
 
-    function appendComment(ev) {
-      var container;
-      if (ev.parent_id) {
-        container = document.querySelector('.reply-list[data-parent="' + ev.parent_id + '"]');
-      } else {
-        container = document.querySelector('.comment-list[data-entry="' + ev.entry_id + '"]');
-      }
-      if (!container) return;
-
-      if (ev.comment_id) {
-        if (seen[ev.comment_id]) return;
-        if (document.querySelector('[data-comment="' + ev.comment_id + '"]')) { seen[ev.comment_id] = true; return; }
-        seen[ev.comment_id] = true;
-      }
-
+    // ----- 댓글/대댓글 실시간 또는 내 작성 삽입 -----
+    function buildComment(ev) {
+      var mine = ev.author_id === CURRENT_USER_ID;
       var wrap = document.createElement("div");
       wrap.className = "comment new-comment" + (ev.parent_id ? " reply" : "");
-      if (ev.comment_id) { wrap.setAttribute("data-comment", ev.comment_id); wrap.id = "comment-" + ev.comment_id; }
+      wrap.id = "comment-" + ev.comment_id;
+      wrap.setAttribute("data-comment", ev.comment_id);
       var img = ev.author_image ? '<img src="' + escapeHtml(ev.author_image) + '" alt="프로필" />' : "";
       wrap.innerHTML =
         img +
@@ -224,100 +266,210 @@
           '<span class="ctime">' + escapeHtml(ev.created_at) + '</span>' +
           '<div class="cmsg">' + escapeHtml(ev.message) + '</div>' +
         '</div>';
-      container.appendChild(wrap);
+      return wrap;
+    }
 
+    function insertComment(ev) {
+      if (ev.comment_id) {
+        if (seen[ev.comment_id]) return;
+        if (document.querySelector('[data-comment="' + ev.comment_id + '"]')) { seen[ev.comment_id] = true; return; }
+        seen[ev.comment_id] = true;
+      }
+      if (ev.parent_id) {
+        var rl = document.querySelector('.reply-list[data-parent="' + ev.parent_id + '"]');
+        if (!rl) return;
+        rl.style.display = "block";
+        rl.appendChild(buildComment(ev));
+      } else {
+        var cl = document.querySelector('.comment-list[data-entry="' + ev.entry_id + '"]');
+        if (!cl) return;
+        var thread = document.createElement("div");
+        thread.className = "comment-thread";
+        thread.appendChild(buildComment(ev));
+        cl.appendChild(thread);
+      }
       var cnt = document.querySelector('.comment-count[data-entry="' + ev.entry_id + '"]');
       if (cnt) cnt.textContent = (parseInt(cnt.textContent, 10) || 0) + 1;
     }
 
+    // ----- 클릭 핸들러 (토글/수정) -----
     document.addEventListener("click", function (e) {
-      var btn = e.target.closest(".reply-toggle");
-      if (!btn) return;
-      var form = document.getElementById(btn.getAttribute("data-target"));
-      if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
+      // 답글 입력 토글
+      var rt = e.target.closest(".reply-toggle");
+      if (rt) {
+        var f = document.getElementById(rt.getAttribute("data-target"));
+        if (f) f.style.display = f.style.display === "none" ? "flex" : "none";
+        return;
+      }
+      // 대댓글 목록 토글
+      var rst = e.target.closest(".replies-toggle");
+      if (rst) {
+        var rl = document.querySelector('.reply-list[data-parent="' + rst.getAttribute("data-parent") + '"]');
+        if (rl) {
+          var show = rl.style.display === "none";
+          rl.style.display = show ? "block" : "none";
+          rst.textContent = show ? "답글 숨기기" : "답글 " + rl.children.length + "개 보기";
+        }
+        return;
+      }
+      // 댓글 전체 접기/펴기
+      var ct = e.target.closest(".comments-toggle");
+      if (ct) {
+        var list = document.querySelector('.comment-list[data-entry="' + ct.getAttribute("data-entry") + '"]');
+        if (list) {
+          var show = list.style.display === "none";
+          list.style.display = show ? "block" : "none";
+          ct.textContent = show ? "접기" : "펴기";
+        }
+        return;
+      }
+      // 게시글 수정 토글
+      var eet = e.target.closest(".entry-edit-toggle");
+      if (eet) {
+        var li = eet.closest(".entry");
+        var ef = li.querySelector(".entry-edit");
+        var msg = li.querySelector(".msg");
+        if (ef) { ef.style.display = ef.style.display === "none" ? "block" : "none"; }
+        if (msg) msg.style.display = (ef && ef.style.display === "block") ? "none" : "";
+        return;
+      }
+      // 댓글 수정 토글
+      var cet = e.target.closest(".edit-toggle");
+      if (cet) {
+        var body = cet.closest(".body");
+        var cf = body.querySelector(".comment-edit");
+        var cm = body.querySelector(".cmsg");
+        if (cf) cf.style.display = cf.style.display === "none" ? "block" : "none";
+        if (cm) cm.style.display = (cf && cf.style.display === "block") ? "none" : "";
+        return;
+      }
+      // 수정 취소
+      var cancel = e.target.closest(".edit-cancel");
+      if (cancel) {
+        var form = cancel.closest(".edit-form");
+        form.style.display = "none";
+        var sib = form.previousElementSibling;
+        // msg 또는 cmsg 복원
+        var host = form.closest(".entry") || form.closest(".body");
+        var target = host.querySelector(".msg") || host.querySelector(".cmsg");
+        if (target) target.style.display = "";
+        return;
+      }
     });
 
-    // 리액션: AJAX로 처리해 스크롤 위치를 유지한다 (페이지 이동 없음)
+    // ----- 리액션 AJAX (스크롤 유지) -----
     function renderReactions(container, state) {
       container.querySelectorAll(".react-btn").forEach(function (btn) {
         var rt = btn.getAttribute("data-rtype");
         var label = btn.getAttribute("data-label");
-        var cnt = (state.counts && state.counts[rt]) || 0;
         var countEl = btn.querySelector(".count");
-        if (countEl) countEl.textContent = cnt;
-        if (state.my_reaction === rt) btn.classList.add("active");
-        else btn.classList.remove("active");
+        if (countEl) countEl.textContent = (state.counts && state.counts[rt]) || 0;
+        if (state.my_reaction === rt) btn.classList.add("active"); else btn.classList.remove("active");
         var who = (state.reactors && state.reactors[rt]) ? state.reactors[rt].join(", ") : "";
         btn.setAttribute("title", label + (who ? " · " + who : ""));
       });
     }
 
+    // ----- 폼 submit 가로채기: 리액션 / 댓글작성 / 수정 모두 AJAX (위치 유지) -----
     document.addEventListener("submit", function (e) {
-      var form = e.target.closest(".react-form");
-      if (!form) return;
-      e.preventDefault();  // 새로고침/이동 방지
-      var container = form.closest(".reactions");
-      var url = form.getAttribute("action");
-      var fd = new FormData(form);
-      fetch(url, {
-        method: "POST",
-        headers: { "X-Requested-With": "fetch" },
-        body: fd,
-        credentials: "same-origin",
-      })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-        .then(function (state) { if (container) renderReactions(container, state); })
-        .catch(function () { /* 실패 시 조용히 무시 (스크롤 유지 우선) */ });
+      var form = e.target;
+
+      // 리액션
+      if (form.classList.contains("react-form")) {
+        e.preventDefault();
+        var container = form.closest(".reactions");
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (s) { if (container) renderReactions(container, s); })
+          .catch(function () {});
+        return;
+      }
+
+      // 댓글/답글 작성
+      if (form.classList.contains("comment-create")) {
+        e.preventDefault();
+        var input = form.querySelector('input[name="message"]');
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (ev) {
+            ev.type = "comment";
+            insertComment(ev);
+            if (input) input.value = "";
+            if (form.classList.contains("reply-form")) form.style.display = "none";
+          })
+          .catch(function () {});
+        return;
+      }
+
+      // 게시글/댓글 수정
+      if (form.classList.contains("edit-form")) {
+        e.preventDefault();
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (data) {
+            var host = form.closest(".entry") || form.closest(".body");
+            var target = host.querySelector(".msg") || host.querySelector(".cmsg");
+            if (target) { target.textContent = data.message; target.style.display = ""; }
+            form.style.display = "none";
+          })
+          .catch(function () {});
+        return;
+      }
     });
 
+    // ----- 알림/작성 복귀 시 포커스 -----
     function flash(el) {
-      el.classList.remove("focus-flash");
-      void el.offsetWidth;
-      el.classList.add("focus-flash");
+      el.classList.remove("focus-flash"); void el.offsetWidth; el.classList.add("focus-flash");
       setTimeout(function () { el.classList.remove("focus-flash"); }, 1800);
     }
-
-    function highlightTarget() {
-      // 1) 알림에서 넘어온 경우: 댓글로 이동 + 강조
+    (function highlightTarget() {
       var params = new URLSearchParams(window.location.search);
       var focusId = params.get("focus");
       if (focusId || window.location.hash.indexOf("#comment-") === 0) {
         var cid = focusId || window.location.hash.slice("#comment-".length);
         var cel = document.getElementById("comment-" + cid);
         if (cel) {
+          var rl = cel.closest(".reply-list");
+          if (rl) rl.style.display = "block";  // 대댓글이면 펼침
           cel.scrollIntoView({ behavior: "auto", block: "center" });
           flash(cel);
         }
         return;
       }
-      // 2) 반응/댓글 작성 후 복귀(#entry-N): 해당 글 위치로 조용히 스크롤 (위치 유지)
       if (window.location.hash.indexOf("#entry-") === 0) {
         var eel = document.getElementById(window.location.hash.slice(1));
         if (eel) eel.scrollIntoView({ behavior: "auto", block: "center" });
       }
-    }
-    highlightTarget();
+    })();
 
-    function bumpBadge(ev) {
-      if (CURRENT_USER_ID == null) return;
-      if (ev.target_user_id == null) return;
-      if (ev.target_user_id !== CURRENT_USER_ID) return;
-      // 상단바 + 사이드바 뱃지 모두 갱신
-      ["top-notif-badge", "side-notif-badge"].forEach(function (bid) {
-        var badge = document.getElementById(bid);
-        if (badge) {
-          badge.style.display = "inline-block";
-          badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1;
-        }
+    // ----- 플로팅 글쓰기 버튼 -----
+    var fab = document.getElementById("fab");
+    var writeForm = document.getElementById("write-form");
+    if (fab && writeForm) {
+      window.addEventListener("scroll", function () {
+        fab.classList.toggle("show", window.scrollY > 300);
+      });
+      fab.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        var ta = writeForm.querySelector("textarea");
+        if (ta) setTimeout(function () { ta.focus(); }, 400);
       });
     }
 
+    // ----- 실시간 댓글 수신 -----
+    function bumpBadge(ev) {
+      if (CURRENT_USER_ID == null || ev.target_user_id == null || ev.target_user_id !== CURRENT_USER_ID) return;
+      ["top-notif-badge", "side-notif-badge"].forEach(function (bid) {
+        var badge = document.getElementById(bid);
+        if (badge) { badge.style.display = "inline-block"; badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1; }
+      });
+    }
     if (typeof EventSource !== "undefined") {
       var es = new EventSource("/events/comments");
       es.onmessage = function (e) {
         try {
           var ev = JSON.parse(e.data);
-          if (ev.type === "comment") { appendComment(ev); bumpBadge(ev); }
+          if (ev.type === "comment") { insertComment(ev); bumpBadge(ev); }
         } catch (_) {}
       };
     }

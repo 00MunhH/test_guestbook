@@ -46,14 +46,29 @@ app.include_router(friends.router)
 app.include_router(chat.router)
 
 
+PER_PAGE = 5  # 페이지당 게시글 수
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
+    page: int = 1,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
-    """홈: 방명록 목록 + 작성 폼(로그인 시)."""
-    stmt = select(GuestbookEntry).order_by(GuestbookEntry.created_at.desc())
+    """홈: 방명록 목록(페이지네이션) + 작성 폼(로그인 시)."""
+    from sqlalchemy import func
+
+    total = db.scalar(select(func.count()).select_from(GuestbookEntry)) or 0
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(1, min(page, total_pages))
+
+    stmt = (
+        select(GuestbookEntry)
+        .order_by(GuestbookEntry.created_at.desc())
+        .offset((page - 1) * PER_PAGE)
+        .limit(PER_PAGE)
+    )
     entries = list(db.scalars(stmt).all())
     return templates.TemplateResponse(
         request,
@@ -63,5 +78,8 @@ def home(
             "user": user,
             "unread": unread_count(db, user),
             "current_user_id": user.id if user else None,
+            "page": page,
+            "total_pages": total_pages,
+            "total_entries": total,
         },
     )
