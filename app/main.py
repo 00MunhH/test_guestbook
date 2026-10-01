@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import account, auth, events, guestbook
+from . import account, auth, chat, events, friends, guestbook
 from .account import unread_count
 from .timeutils import to_kst
 from .auth import get_current_user
@@ -42,6 +42,8 @@ app.include_router(auth.router)
 app.include_router(guestbook.router)
 app.include_router(account.router)
 app.include_router(events.router)
+app.include_router(friends.router)
+app.include_router(chat.router)
 
 
 @app.get("/", response_class=HTMLResponse)

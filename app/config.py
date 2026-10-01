@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     admin_username: str = ""
     admin_password: str = ""
 
+    # 채팅 파일 업로드 저장 디렉터리
+    upload_dir: str = "./uploads"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

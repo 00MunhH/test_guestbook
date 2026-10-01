@@ -17,6 +17,9 @@ env/
 *.db
 *.sqlite3
 
+# 로컬 업로드 파일
+uploads/
+
 # 문서/개발용
 README.md
 query_db.py

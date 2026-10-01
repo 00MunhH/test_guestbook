@@ -164,3 +164,84 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     user: Mapped["User"] = relationship()
+
+
+class Friendship(Base):
+    """사이 맺기(친구) 관계. requester가 addressee에게 요청한다."""
+
+    __tablename__ = "friendships"
+    __table_args__ = (
+        UniqueConstraint("requester_id", "addressee_id", name="uq_friend_pair"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    addressee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # pending | accepted
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    # 관계 라벨 (친구/동료 등, 자유 입력)
+    relation_label: Mapped[str] = mapped_column(String(32), default="친구")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    requester: Mapped["User"] = relationship(foreign_keys=[requester_id])
+    addressee: Mapped["User"] = relationship(foreign_keys=[addressee_id])
+
+
+class ChatRoom(Base):
+    """그룹 채팅방."""
+
+    __tablename__ = "chat_rooms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    owner: Mapped["User"] = relationship(foreign_keys=[owner_id])
+    memberships: Mapped[list["ChatMembership"]] = relationship(
+        back_populates="room", cascade="all, delete-orphan"
+    )
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="room",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+
+class ChatMembership(Base):
+    """채팅방 멤버십."""
+
+    __tablename__ = "chat_memberships"
+    __table_args__ = (
+        UniqueConstraint("room_id", "user_id", name="uq_room_member"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("chat_rooms.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    room: Mapped["ChatRoom"] = relationship(back_populates="memberships")
+    user: Mapped["User"] = relationship()
+
+
+class ChatMessage(Base):
+    """채팅 메시지 (텍스트 또는 파일)."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("chat_rooms.id"), index=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    body: Mapped[str] = mapped_column(Text, default="")
+    # 파일 첨부가 있으면 저장 파일명/원본명 기록
+    file_name: Mapped[str] = mapped_column(String(255), default="")
+    original_name: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    room: Mapped["ChatRoom"] = relationship(back_populates="messages")
+    sender: Mapped["User"] = relationship()
+
+    @property
+    def has_file(self) -> bool:
+        return bool(self.file_name)

@@ -91,6 +91,8 @@
       {% if user %}
         {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="프로필" />{% endif %}
         <span>{{ user.shown_name }}님 <small class="joined">(가입일 {{ user.created_at.strftime("%Y-%m-%d") }})</small></span>
+        <a class="btn btn-ghost" href="/friends">🤝 친구</a>
+        <a class="btn btn-ghost" href="/chat">💬 채팅</a>
         <a class="btn btn-ghost" href="/notifications">🔔 알림<span id="notif-badge" class="notif-badge" {% if not unread %}style="display:none"{% endif %}>{{ unread }}</span></a>
         <a class="btn btn-ghost" href="/me">내 정보</a>
         {% if user.is_admin %}<a class="btn btn-ghost" href="/admin">관리자</a>{% endif %}
