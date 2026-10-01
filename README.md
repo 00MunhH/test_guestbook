@@ -93,7 +93,9 @@ uvicorn app.main:app --reload
 
 - 우측 상단 **카카오 로그인** 버튼으로 로그인합니다.
 - 로그인 후 방명록 작성 폼이 나타나며, 글을 등록할 수 있습니다.
-- 로그인하지 않아도 방명록 목록은 볼 수 있습니다.
+- 각 글에 **좋아요 👍 / 싫어요 👎 / 감사해요 🙏** 반응을 남길 수 있습니다. 같은 반응을 다시 누르면 취소되고, 다른 반응을 누르면 변경됩니다(사용자당 글마다 1개).
+- 각 글에 **댓글**을 작성할 수 있으며, 본인이 작성한 댓글은 삭제할 수 있습니다.
+- 로그인하지 않아도 방명록 목록, 반응 수, 댓글은 모두 볼 수 있습니다. (작성/반응만 로그인 필요)
 
 ## API 엔드포인트
 
@@ -104,6 +106,9 @@ uvicorn app.main:app --reload
 | GET    | `/api/entries/{id}`      | 방명록 단건(JSON)       | 불필요   |
 | POST   | `/api/entries`           | 방명록 작성(JSON, form) | **필요** |
 | POST   | `/entries`               | 방명록 작성(HTML 폼)    | **필요** |
+| POST   | `/entries/{id}/react`    | 반응 토글(좋아요/싫어요/감사해요) | **필요** |
+| POST   | `/entries/{id}/comments` | 댓글 작성               | **필요** |
+| POST   | `/comments/{id}/delete`  | 댓글 삭제(본인만)       | **필요** |
 | GET    | `/auth/kakao/login`      | 카카오 로그인 시작      | 불필요   |
 | GET    | `/auth/kakao/callback`   | 카카오 OAuth 콜백       | 불필요   |
 | GET    | `/auth/logout`           | 로그아웃                | 불필요   |

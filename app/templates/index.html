@@ -36,6 +36,35 @@
     .user .joined { color: #999; font-weight: 400; font-size: 12px; }
     li.entry .msg { white-space: pre-wrap; line-height: 1.5; }
     .empty { color: #999; text-align: center; padding: 32px 0; }
+
+    /* 반응 */
+    .reactions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .reactions form { margin: 0; }
+    .react-btn {
+      display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px;
+      border: 1px solid #e2e2e2; background: #fff; border-radius: 999px;
+      font-size: 13px; cursor: pointer; color: #444; line-height: 1;
+    }
+    .react-btn:hover { background: #f4f4f4; }
+    .react-btn.active { background: #fff6c2; border-color: var(--kakao); color: #191600; font-weight: 600; }
+    .react-btn .count { color: #888; font-weight: 500; }
+    .react-btn.active .count { color: #191600; }
+    .react-btn.disabled { cursor: default; opacity: .85; }
+
+    /* 댓글 */
+    .comments { margin-top: 14px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+    .comments h4 { font-size: 13px; color: #888; margin: 0 0 8px; }
+    .comment { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .comment img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
+    .comment .body { flex: 1; }
+    .comment .cname { font-weight: 600; font-size: 13px; }
+    .comment .ctime { color: #aaa; font-size: 11px; margin-left: 6px; }
+    .comment .cmsg { font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+    .comment .cdel { background: none; border: none; color: #c33; font-size: 12px; cursor: pointer; padding: 0; }
+    .comment-form { display: flex; gap: 8px; margin-top: 10px; }
+    .comment-form input[type=text] { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+    .btn-sm { padding: 8px 12px; font-size: 13px; }
+    .muted { color: #aaa; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -65,9 +94,13 @@
     </div>
   {% endif %}
 
+  {% set reaction_labels = [("like", "👍", "좋아요"), ("dislike", "👎", "싫어요"), ("thanks", "🙏", "감사해요")] %}
+
   <ul class="entries">
     {% for entry in entries %}
-      <li class="entry">
+      {% set counts = entry.reaction_counts() %}
+      {% set my_reaction = entry.user_reaction(user.id) if user else None %}
+      <li class="entry" id="entry-{{ entry.id }}">
         <div class="meta">
           {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
           <span class="name">{{ entry.author.nickname }}</span>
@@ -75,6 +108,55 @@
           <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
         </div>
         <div class="msg">{{ entry.message }}</div>
+
+        <!-- 반응 -->
+        <div class="reactions">
+          {% for rtype, emoji, label in reaction_labels %}
+            {% if user %}
+              <form action="/entries/{{ entry.id }}/react" method="post">
+                <input type="hidden" name="reaction_type" value="{{ rtype }}" />
+                <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit" title="{{ label }}">
+                  <span>{{ emoji }}</span><span>{{ label }}</span>
+                  <span class="count">{{ counts[rtype] }}</span>
+                </button>
+              </form>
+            {% else %}
+              <span class="react-btn disabled" title="로그인 후 반응할 수 있습니다">
+                <span>{{ emoji }}</span><span>{{ label }}</span>
+                <span class="count">{{ counts[rtype] }}</span>
+              </span>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- 댓글 -->
+        <div class="comments">
+          <h4>댓글 {{ entry.comments | length }}</h4>
+          {% for c in entry.comments %}
+            <div class="comment">
+              {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
+              <div class="body">
+                <span class="cname">{{ c.author.nickname }}</span>
+                <span class="ctime">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+                <div class="cmsg">{{ c.message }}</div>
+              </div>
+              {% if user and c.author_id == user.id %}
+                <form action="/comments/{{ c.id }}/delete" method="post">
+                  <button class="cdel" type="submit">삭제</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          {% if user %}
+            <form class="comment-form" action="/entries/{{ entry.id }}/comments" method="post">
+              <input type="text" name="message" placeholder="댓글을 입력하세요..." required />
+              <button class="btn btn-primary btn-sm" type="submit">댓글</button>
+            </form>
+          {% else %}
+            <p class="muted">댓글을 남기려면 로그인하세요.</p>
+          {% endif %}
+        </div>
       </li>
     {% else %}
       <li class="empty">아직 등록된 방명록이 없습니다.</li>

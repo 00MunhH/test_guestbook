@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .auth import require_user
 from .database import get_db
-from .models import GuestbookEntry, User
+from .models import REACTION_TYPES, Comment, GuestbookEntry, Reaction, User
 
 router = APIRouter(tags=["guestbook"])
 
@@ -78,3 +78,77 @@ def create_entry_form(
         db.add(entry)
         db.commit()
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ----- 반응 (좋아요/싫어요/감사해요) -----
+@router.post("/entries/{entry_id}/react")
+def react_entry(
+    entry_id: int,
+    reaction_type: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """반응 토글 (로그인 필요).
+
+    - 같은 타입을 다시 누르면 취소
+    - 다른 타입을 누르면 변경
+    - 없으면 새로 추가
+    사용자당 글마다 하나의 반응만 유지한다.
+    """
+    if reaction_type not in REACTION_TYPES:
+        raise HTTPException(status_code=400, detail="알 수 없는 반응 타입입니다.")
+
+    entry = db.get(GuestbookEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
+
+    existing = db.scalar(
+        select(Reaction).where(
+            Reaction.user_id == user.id, Reaction.entry_id == entry_id
+        )
+    )
+    if existing is None:
+        db.add(Reaction(user_id=user.id, entry_id=entry_id, reaction_type=reaction_type))
+    elif existing.reaction_type == reaction_type:
+        db.delete(existing)  # 같은 반응 재클릭 → 취소
+    else:
+        existing.reaction_type = reaction_type  # 다른 반응 → 변경
+    db.commit()
+    return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ----- 댓글 -----
+@router.post("/entries/{entry_id}/comments")
+def create_comment(
+    entry_id: int,
+    message: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """댓글 작성 (로그인 필요)."""
+    entry = db.get(GuestbookEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
+    text = message.strip()
+    if text:
+        db.add(Comment(message=text, author_id=user.id, entry_id=entry_id))
+        db.commit()
+    return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/comments/{comment_id}/delete")
+def delete_comment(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """댓글 삭제 (본인 댓글만 가능)."""
+    comment = db.get(Comment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    if comment.author_id != user.id:
+        raise HTTPException(status_code=403, detail="본인 댓글만 삭제할 수 있습니다.")
+    entry_id = comment.entry_id
+    db.delete(comment)
+    db.commit()
+    return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
