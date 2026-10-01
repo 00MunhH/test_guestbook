@@ -80,6 +80,23 @@ def create_entry_form(
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.post("/entries/{entry_id}/delete")
+def delete_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """방명록 글 삭제 (본인 글만 가능). 관련 반응/댓글도 함께 삭제된다."""
+    entry = db.get(GuestbookEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
+    if entry.author_id != user.id:
+        raise HTTPException(status_code=403, detail="본인 글만 삭제할 수 있습니다.")
+    db.delete(entry)  # cascade로 반응/댓글도 삭제
+    db.commit()
+    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # ----- 반응 (좋아요/싫어요/감사해요) -----
 @router.post("/entries/{entry_id}/react")
 def react_entry(

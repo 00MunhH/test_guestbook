@@ -33,6 +33,9 @@
     li.entry .meta .name { font-weight: 600; font-size: 14px; }
     li.entry .meta .joined { color: #aaa; font-size: 12px; }
     li.entry .meta .time { color: #999; font-size: 12px; margin-left: auto; }
+    li.entry .meta form { margin: 0; }
+    li.entry .meta .entry-del { background: none; border: none; color: #c33; font-size: 12px; cursor: pointer; padding: 0; }
+    li.entry .meta .entry-del:hover { text-decoration: underline; }
     .user .joined { color: #999; font-weight: 400; font-size: 12px; }
     li.entry .msg { white-space: pre-wrap; line-height: 1.5; }
     .empty { color: #999; text-align: center; padding: 32px 0; }
@@ -106,6 +109,11 @@
           <span class="name">{{ entry.author.nickname }}</span>
           <span class="joined">가입일 {{ entry.author.created_at.strftime("%Y-%m-%d") }}</span>
           <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+          {% if user and entry.author_id == user.id %}
+            <form action="/entries/{{ entry.id }}/delete" method="post" onsubmit="return confirm('이 글을 삭제할까요? 댓글과 반응도 함께 삭제됩니다.');">
+              <button class="entry-del" type="submit">삭제</button>
+            </form>
+          {% endif %}
         </div>
         <div class="msg">{{ entry.message }}</div>
 
