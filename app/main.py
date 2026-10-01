@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import account, auth, events, guestbook
 from .account import unread_count
+from .timeutils import to_kst
 from .auth import get_current_user
 from .config import settings
 from .database import get_db, init_db
@@ -18,6 +19,9 @@ from .models import GuestbookEntry, User
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Jinja2 전역 필터 등록 (KST 시간 표시)
+templates.env.filters["kst"] = to_kst
 
 
 @asynccontextmanager

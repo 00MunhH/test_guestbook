@@ -62,6 +62,17 @@ class GuestbookEntry(Base):
         order_by="Comment.created_at",
     )
 
+    @property
+    def top_comments(self) -> list["Comment"]:
+        """최상위 댓글만 (대댓글 제외), 작성순."""
+        tops = [c for c in self.comments if c.parent_id is None]
+        return sorted(tops, key=lambda c: c.created_at)
+
+    @property
+    def comment_total(self) -> int:
+        """댓글 + 대댓글 전체 개수."""
+        return len(self.comments)
+
     def reaction_counts(self) -> dict[str, int]:
         """반응 타입별 개수 집계."""
         counts = {t: 0 for t in REACTION_TYPES}
@@ -100,7 +111,7 @@ class Reaction(Base):
 
 
 class Comment(Base):
-    """방명록 글에 대한 댓글."""
+    """방명록 글에 대한 댓글. parent_id가 있으면 대댓글(답글)이다."""
 
     __tablename__ = "comments"
 
@@ -110,9 +121,24 @@ class Comment(Base):
 
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     entry_id: Mapped[int] = mapped_column(ForeignKey("guestbook_entries.id"))
+    # 대댓글이면 상위 댓글 id (최상위 댓글이면 None)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("comments.id"), nullable=True, index=True
+    )
 
     author: Mapped["User"] = relationship()
     entry: Mapped["GuestbookEntry"] = relationship(back_populates="comments")
+
+    # 자기참조: 답글 목록 / 부모 댓글
+    replies: Mapped[list["Comment"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        order_by="Comment.created_at",
+        single_parent=True,
+    )
+    parent: Mapped["Comment | None"] = relationship(
+        back_populates="replies", remote_side="Comment.id"
+    )
 
 
 class Notification(Base):

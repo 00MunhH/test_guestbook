@@ -40,6 +40,11 @@
     .notif-badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 11px; text-align: center; }
     .comment.new-comment { animation: flash 1.2s ease; }
     @keyframes flash { from { background: #fff3bf; } to { background: transparent; } }
+    .reply-list { margin-top: 8px; padding-left: 14px; border-left: 2px solid #f0f0f0; }
+    .comment.reply { margin-bottom: 6px; }
+    .reply-toggle { background: none; border: none; color: #868e96; font-size: 12px; cursor: pointer; padding: 2px 0; margin-top: 4px; }
+    .reply-toggle:hover { text-decoration: underline; }
+    .reply-form { margin-top: 8px; }
     li.entry .msg { white-space: pre-wrap; line-height: 1.5; }
     .empty { color: #999; text-align: center; padding: 32px 0; }
 
@@ -114,8 +119,7 @@
         <div class="meta">
           {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
           <span class="name">{{ entry.author.shown_name }}</span>
-          <span class="joined">가입일 {{ entry.author.created_at.strftime("%Y-%m-%d") }}</span>
-          <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+          <span class="time">{{ entry.created_at | kst }}</span>
           {% if user and entry.author_id == user.id %}
             <form action="/entries/{{ entry.id }}/delete" method="post" onsubmit="return confirm('이 글을 삭제할까요? 댓글과 반응도 함께 삭제됩니다.');">
               <button class="entry-del" type="submit">삭제</button>
@@ -146,15 +150,44 @@
 
         <!-- 댓글 -->
         <div class="comments">
-          <h4>댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comments | length }}</span></h4>
+          <h4>댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comment_total }}</span></h4>
           <div class="comment-list" data-entry="{{ entry.id }}">
-          {% for c in entry.comments %}
+          {% for c in entry.top_comments %}
             <div class="comment" data-comment="{{ c.id }}">
               {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
               <div class="body">
                 <span class="cname">{{ c.author.shown_name }}</span>
-                <span class="ctime">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+                <span class="ctime">{{ c.created_at | kst }}</span>
                 <div class="cmsg">{{ c.message }}</div>
+
+                <!-- 대댓글(답글) 목록 -->
+                <div class="reply-list" data-parent="{{ c.id }}">
+                  {% for r in c.replies %}
+                    <div class="comment reply" data-comment="{{ r.id }}">
+                      {% if r.author.profile_image %}<img src="{{ r.author.profile_image }}" alt="프로필" />{% endif %}
+                      <div class="body">
+                        <span class="cname">{{ r.author.shown_name }}</span>
+                        <span class="ctime">{{ r.created_at | kst }}</span>
+                        <div class="cmsg">{{ r.message }}</div>
+                      </div>
+                      {% if user and r.author_id == user.id %}
+                        <form action="/comments/{{ r.id }}/delete" method="post">
+                          <button class="cdel" type="submit">삭제</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+
+                {% if user %}
+                  <button type="button" class="reply-toggle" data-target="reply-form-{{ c.id }}">답글</button>
+                  <form class="reply-form comment-form" id="reply-form-{{ c.id }}" style="display:none"
+                        action="/entries/{{ entry.id }}/comments" method="post">
+                    <input type="hidden" name="parent_id" value="{{ c.id }}" />
+                    <input type="text" name="message" placeholder="답글을 입력하세요..." required />
+                    <button class="btn btn-primary btn-sm" type="submit">답글</button>
+                  </form>
+                {% endif %}
               </div>
               {% if user and c.author_id == user.id %}
                 <form action="/comments/{{ c.id }}/delete" method="post">
@@ -192,12 +225,19 @@
       }
 
       function appendComment(ev) {
-        var list = document.querySelector('.comment-list[data-entry="' + ev.entry_id + '"]');
-        if (!list) return;  // 현재 페이지에 없는 글
-        if (ev.comment_id && seen[ev.comment_id]) return;
+        // 대상 컨테이너: 대댓글이면 부모의 reply-list, 아니면 글의 comment-list
+        var container;
+        if (ev.parent_id) {
+          container = document.querySelector('.reply-list[data-parent="' + ev.parent_id + '"]');
+        } else {
+          container = document.querySelector('.comment-list[data-entry="' + ev.entry_id + '"]');
+        }
+        if (!container) return;  // 현재 페이지에 없음
+
         if (ev.comment_id) {
+          if (seen[ev.comment_id]) return;
           // 이미 서버 렌더링으로 들어있는지 확인 (본인이 방금 작성한 경우 등)
-          if (list.querySelector('[data-comment="' + ev.comment_id + '"]')) {
+          if (document.querySelector('[data-comment="' + ev.comment_id + '"]')) {
             seen[ev.comment_id] = true;
             return;
           }
@@ -205,7 +245,7 @@
         }
 
         var wrap = document.createElement("div");
-        wrap.className = "comment new-comment";
+        wrap.className = "comment new-comment" + (ev.parent_id ? " reply" : "");
         if (ev.comment_id) wrap.setAttribute("data-comment", ev.comment_id);
         var img = ev.author_image
           ? '<img src="' + escapeHtml(ev.author_image) + '" alt="프로필" />' : "";
@@ -216,12 +256,20 @@
             '<span class="ctime">' + escapeHtml(ev.created_at) + '</span>' +
             '<div class="cmsg">' + escapeHtml(ev.message) + '</div>' +
           '</div>';
-        list.appendChild(wrap);
+        container.appendChild(wrap);
 
-        // 댓글 수 +1
+        // 댓글 수 +1 (대댓글 포함 전체)
         var cnt = document.querySelector('.comment-count[data-entry="' + ev.entry_id + '"]');
         if (cnt) cnt.textContent = (parseInt(cnt.textContent, 10) || 0) + 1;
       }
+
+      // 답글 입력창 토글
+      document.addEventListener("click", function (e) {
+        var btn = e.target.closest(".reply-toggle");
+        if (!btn) return;
+        var form = document.getElementById(btn.getAttribute("data-target"));
+        if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
+      });
 
       function bumpBadge(ev) {
         // 내 글에 달린 (내가 쓰지 않은) 댓글이면 알림 뱃지 갱신

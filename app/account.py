@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .auth import get_current_user, require_admin, require_user
 from .database import get_db
 from .models import Notification, User
+from .timeutils import to_kst
 
 
 def unread_count(db: Session, user: User | None) -> int:
@@ -24,6 +25,7 @@ router = APIRouter(tags=["account"])
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.filters["kst"] = to_kst
 
 
 # ----- 내 정보 -----

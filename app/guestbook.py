@@ -9,6 +9,7 @@ from .auth import require_user
 from .database import get_db
 from .events import broker
 from .models import REACTION_TYPES, Comment, GuestbookEntry, Notification, Reaction, User
+from .timeutils import to_kst
 
 router = APIRouter(tags=["guestbook"])
 
@@ -135,57 +136,89 @@ def react_entry(
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
-# ----- 댓글 -----
+# ----- 댓글 / 대댓글 -----
 @router.post("/entries/{entry_id}/comments")
 async def create_comment(
     entry_id: int,
     message: str = Form(...),
+    parent_id: int | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """댓글 작성 (로그인 필요).
+    """댓글/대댓글 작성 (로그인 필요).
 
-    - 글 작성자(본인 제외)에게 인앱 알림 생성
-    - SSE로 실시간 댓글 이벤트 브로드캐스트
+    - parent_id가 없으면 최상위 댓글 → 글 작성자에게 알림
+    - parent_id가 있으면 대댓글 → 원 댓글 작성자에게 알림
+    - 본인에게는 알림을 보내지 않음
+    - SSE로 실시간 이벤트 브로드캐스트
     """
     entry = db.get(GuestbookEntry, entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
+
+    parent = None
+    if parent_id is not None:
+        parent = db.get(Comment, parent_id)
+        if parent is None or parent.entry_id != entry_id:
+            raise HTTPException(status_code=400, detail="원 댓글을 찾을 수 없습니다.")
+        # 대댓글의 대댓글은 최상위 댓글에 묶음 (1단계 깊이 유지)
+        if parent.parent_id is not None:
+            parent = db.get(Comment, parent.parent_id)
+
     text = message.strip()
-    if text:
-        comment = Comment(message=text, author_id=user.id, entry_id=entry_id)
-        db.add(comment)
-        db.commit()
-        db.refresh(comment)
-
-        author_name = user.shown_name
-
-        # 글 작성자에게 알림 (본인 댓글은 제외)
-        if entry.author_id != user.id:
-            db.add(
-                Notification(
-                    user_id=entry.author_id,
-                    kind="comment",
-                    message=f"{author_name}님이 회원님의 글에 댓글을 남겼습니다: {text[:40]}",
-                    entry_id=entry_id,
-                    comment_id=comment.id,
-                )
-            )
-            db.commit()
-
-        # 실시간 브로드캐스트 (같은 글을 보고 있는 모든 사용자에게)
-        await broker.publish(
-            {
-                "type": "comment",
-                "entry_id": entry_id,
-                "comment_id": comment.id,
-                "author": author_name,
-                "author_image": user.profile_image,
-                "message": text,
-                "created_at": comment.created_at.strftime("%Y-%m-%d %H:%M"),
-                "target_user_id": entry.author_id if entry.author_id != user.id else None,
-            }
+    if not text:
+        return RedirectResponse(
+            url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER
         )
+
+    comment = Comment(
+        message=text,
+        author_id=user.id,
+        entry_id=entry_id,
+        parent_id=parent.id if parent else None,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    author_name = user.shown_name
+
+    # 알림 대상 결정
+    if parent is not None:
+        # 대댓글 → 원 댓글 작성자에게
+        target_id = parent.author_id
+        notif_msg = f"{author_name}님이 회원님의 댓글에 답글을 남겼습니다: {text[:40]}"
+    else:
+        # 최상위 댓글 → 글 작성자에게
+        target_id = entry.author_id
+        notif_msg = f"{author_name}님이 회원님의 글에 댓글을 남겼습니다: {text[:40]}"
+
+    if target_id != user.id:
+        db.add(
+            Notification(
+                user_id=target_id,
+                kind="reply" if parent else "comment",
+                message=notif_msg,
+                entry_id=entry_id,
+                comment_id=comment.id,
+            )
+        )
+        db.commit()
+
+    # 실시간 브로드캐스트
+    await broker.publish(
+        {
+            "type": "comment",
+            "entry_id": entry_id,
+            "comment_id": comment.id,
+            "parent_id": parent.id if parent else None,
+            "author": author_name,
+            "author_image": user.profile_image,
+            "message": text,
+            "created_at": to_kst(comment.created_at),
+            "target_user_id": target_id if target_id != user.id else None,
+        }
+    )
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
