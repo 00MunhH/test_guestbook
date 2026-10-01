@@ -99,7 +99,24 @@ def delete_entry(
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 
-# ----- 반응 (좋아요/싫어요/감사해요) -----
+# 반응 타입 → 한글 라벨 (알림 메시지용)
+REACTION_LABELS = {"like": "좋아요", "dislike": "싫어요", "thanks": "감사해요"}
+
+
+def _notify_reaction(db, target_id, actor_name, label, entry_id, comment_id, where):
+    """반응을 받은 글/댓글 작성자에게 알림 생성 (본인 제외, 새로 추가될 때만)."""
+    db.add(
+        Notification(
+            user_id=target_id,
+            kind="reaction",
+            message=f"{actor_name}님이 회원님의 {where}에 '{label}' 반응을 남겼습니다.",
+            entry_id=entry_id,
+            comment_id=comment_id,
+        )
+    )
+
+
+# ----- 글 반응 (좋아요/싫어요/감사해요) -----
 @router.post("/entries/{entry_id}/react")
 def react_entry(
     entry_id: int,
@@ -107,13 +124,7 @@ def react_entry(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """반응 토글 (로그인 필요).
-
-    - 같은 타입을 다시 누르면 취소
-    - 다른 타입을 누르면 변경
-    - 없으면 새로 추가
-    사용자당 글마다 하나의 반응만 유지한다.
-    """
+    """글 반응 토글 (로그인 필요). 새 반응이면 글 작성자에게 알림."""
     if reaction_type not in REACTION_TYPES:
         raise HTTPException(status_code=400, detail="알 수 없는 반응 타입입니다.")
 
@@ -126,14 +137,67 @@ def react_entry(
             Reaction.user_id == user.id, Reaction.entry_id == entry_id
         )
     )
+    notify = False
     if existing is None:
         db.add(Reaction(user_id=user.id, entry_id=entry_id, reaction_type=reaction_type))
+        notify = True
     elif existing.reaction_type == reaction_type:
-        db.delete(existing)  # 같은 반응 재클릭 → 취소
+        db.delete(existing)  # 같은 반응 재클릭 → 취소 (알림 없음)
     else:
-        existing.reaction_type = reaction_type  # 다른 반응 → 변경
+        existing.reaction_type = reaction_type  # 변경 → 알림
+        notify = True
+
+    if notify and entry.author_id != user.id:
+        _notify_reaction(
+            db, entry.author_id, user.shown_name,
+            REACTION_LABELS.get(reaction_type, reaction_type),
+            entry_id, None, "글",
+        )
     db.commit()
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ----- 댓글/대댓글 반응 -----
+@router.post("/comments/{comment_id}/react")
+def react_comment(
+    comment_id: int,
+    reaction_type: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """댓글/대댓글 반응 토글 (로그인 필요). 새 반응이면 댓글 작성자에게 알림."""
+    if reaction_type not in REACTION_TYPES:
+        raise HTTPException(status_code=400, detail="알 수 없는 반응 타입입니다.")
+
+    comment = db.get(Comment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+
+    existing = db.scalar(
+        select(Reaction).where(
+            Reaction.user_id == user.id, Reaction.comment_id == comment_id
+        )
+    )
+    notify = False
+    if existing is None:
+        db.add(Reaction(user_id=user.id, comment_id=comment_id, reaction_type=reaction_type))
+        notify = True
+    elif existing.reaction_type == reaction_type:
+        db.delete(existing)
+    else:
+        existing.reaction_type = reaction_type
+        notify = True
+
+    if notify and comment.author_id != user.id:
+        _notify_reaction(
+            db, comment.author_id, user.shown_name,
+            REACTION_LABELS.get(reaction_type, reaction_type),
+            comment.entry_id, comment_id, "댓글",
+        )
+    db.commit()
+    return RedirectResponse(
+        url=f"/#comment-{comment_id}", status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
 # ----- 댓글 / 대댓글 -----

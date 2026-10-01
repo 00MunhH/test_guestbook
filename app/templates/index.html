@@ -38,6 +38,8 @@
   .react-btn .count { color: #888; font-weight: 500; }
   .react-btn.active .count { color: #191600; }
   .react-btn.disabled { cursor: default; opacity: .85; }
+  .creactions .reactions { margin-top: 6px; gap: 6px; }
+  .creactions .react-btn { padding: 3px 8px; font-size: 12px; }
 
   .comments { margin-top: 14px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
   .comments h4 { font-size: 13px; color: #888; margin: 0 0 8px; }
@@ -71,10 +73,35 @@
 
   {% set reaction_labels = [("like", "👍", "좋아요"), ("dislike", "👎", "싫어요"), ("thanks", "🙏", "감사해요")] %}
 
+  {# 반응 버튼 묶음 매크로: target_type은 'entries'(글) 또는 'comments'(댓글) #}
+  {% macro reaction_bar(obj, target_type, obj_id) %}
+    {% set counts = obj.reaction_counts() %}
+    {% set my_reaction = obj.user_reaction(user.id) if user else None %}
+    {% set names = obj.reactor_names() %}
+    <div class="reactions">
+      {% for rtype, emoji, label in reaction_labels %}
+        {% set who = names[rtype] | join(', ') %}
+        {% set tip = label + (' · ' + who if who else '') %}
+        {% if user %}
+          <form action="/{{ target_type }}/{{ obj_id }}/react" method="post">
+            <input type="hidden" name="reaction_type" value="{{ rtype }}" />
+            <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit" title="{{ tip }}">
+              <span>{{ emoji }}</span><span>{{ label }}</span>
+              <span class="count">{{ counts[rtype] }}</span>
+            </button>
+          </form>
+        {% else %}
+          <span class="react-btn disabled" title="{{ tip }}">
+            <span>{{ emoji }}</span><span>{{ label }}</span>
+            <span class="count">{{ counts[rtype] }}</span>
+          </span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endmacro %}
+
   <ul class="entries">
     {% for entry in entries %}
-      {% set counts = entry.reaction_counts() %}
-      {% set my_reaction = entry.user_reaction(user.id) if user else None %}
       <li class="entry" id="entry-{{ entry.id }}">
         <div class="meta">
           {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
@@ -88,25 +115,8 @@
         </div>
         <div class="msg">{{ entry.message }}</div>
 
-        <!-- 반응 -->
-        <div class="reactions">
-          {% for rtype, emoji, label in reaction_labels %}
-            {% if user %}
-              <form action="/entries/{{ entry.id }}/react" method="post">
-                <input type="hidden" name="reaction_type" value="{{ rtype }}" />
-                <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit" title="{{ label }}">
-                  <span>{{ emoji }}</span><span>{{ label }}</span>
-                  <span class="count">{{ counts[rtype] }}</span>
-                </button>
-              </form>
-            {% else %}
-              <span class="react-btn disabled" title="로그인 후 반응할 수 있습니다">
-                <span>{{ emoji }}</span><span>{{ label }}</span>
-                <span class="count">{{ counts[rtype] }}</span>
-              </span>
-            {% endif %}
-          {% endfor %}
-        </div>
+        <!-- 글 반응 -->
+        {{ reaction_bar(entry, 'entries', entry.id) }}
 
         <!-- 댓글 -->
         <div class="comments">
@@ -119,6 +129,7 @@
                 <span class="cname">{{ c.author.shown_name }}</span>
                 <span class="ctime">{{ c.created_at | kst }}</span>
                 <div class="cmsg">{{ c.message }}</div>
+                <div class="creactions">{{ reaction_bar(c, 'comments', c.id) }}</div>
 
                 <div class="reply-list" data-parent="{{ c.id }}">
                   {% for r in c.replies %}
@@ -128,6 +139,7 @@
                         <span class="cname">{{ r.author.shown_name }}</span>
                         <span class="ctime">{{ r.created_at | kst }}</span>
                         <div class="cmsg">{{ r.message }}</div>
+                        <div class="creactions">{{ reaction_bar(r, 'comments', r.id) }}</div>
                       </div>
                       {% if user and r.author_id == user.id %}
                         <form action="/comments/{{ r.id }}/delete" method="post">
@@ -224,22 +236,31 @@
       if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
     });
 
-    function highlightTarget() {
-      var id = null;
-      var params = new URLSearchParams(window.location.search);
-      if (params.get("focus")) {
-        id = params.get("focus");
-      } else if (window.location.hash.indexOf("#comment-") === 0) {
-        id = window.location.hash.slice("#comment-".length);
-      }
-      if (!id) return;
-      var el = document.getElementById("comment-" + id);
-      if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    function flash(el) {
       el.classList.remove("focus-flash");
       void el.offsetWidth;
       el.classList.add("focus-flash");
       setTimeout(function () { el.classList.remove("focus-flash"); }, 1800);
+    }
+
+    function highlightTarget() {
+      // 1) 알림에서 넘어온 경우: 댓글로 이동 + 강조
+      var params = new URLSearchParams(window.location.search);
+      var focusId = params.get("focus");
+      if (focusId || window.location.hash.indexOf("#comment-") === 0) {
+        var cid = focusId || window.location.hash.slice("#comment-".length);
+        var cel = document.getElementById("comment-" + cid);
+        if (cel) {
+          cel.scrollIntoView({ behavior: "auto", block: "center" });
+          flash(cel);
+        }
+        return;
+      }
+      // 2) 반응/댓글 작성 후 복귀(#entry-N): 해당 글 위치로 조용히 스크롤 (위치 유지)
+      if (window.location.hash.indexOf("#entry-") === 0) {
+        var eel = document.getElementById(window.location.hash.slice(1));
+        if (eel) eel.scrollIntoView({ behavior: "auto", block: "center" });
+      }
     }
     highlightTarget();
 

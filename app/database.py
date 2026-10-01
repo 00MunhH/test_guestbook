@@ -63,6 +63,51 @@ def _auto_migrate() -> None:
                 ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}{default_sql}'
                 conn.execute(text(ddl))
 
+    # reactions.entry_id가 기존 NOT NULL이면 댓글 반응(entry_id=NULL) 삽입이 막힌다.
+    # SQLite는 컬럼 NULL 제약 변경이 안 되므로 테이블을 재생성한다.
+    _relax_reactions_entry_nullable(inspector)
+
+
+def _relax_reactions_entry_nullable(inspector) -> None:
+    """reactions.entry_id를 nullable로 완화 (댓글 반응 지원)."""
+    from sqlalchemy import inspect as _inspect
+    from sqlalchemy import text
+
+    inspector = _inspect(engine)
+    if "reactions" not in inspector.get_table_names():
+        return
+    cols = {c["name"]: c for c in inspector.get_columns("reactions")}
+    # comment_id가 있고 entry_id가 NOT NULL인 경우에만 재구성
+    if "comment_id" not in cols:
+        return
+    entry_col = cols.get("entry_id")
+    if entry_col is None or entry_col.get("nullable", True):
+        return  # 이미 nullable이면 할 일 없음
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE reactions RENAME TO reactions_old"))
+        conn.execute(
+            text(
+                "CREATE TABLE reactions ("
+                "id INTEGER PRIMARY KEY, "
+                "reaction_type VARCHAR(16), "
+                "created_at DATETIME, "
+                "user_id INTEGER NOT NULL REFERENCES users(id), "
+                "entry_id INTEGER REFERENCES guestbook_entries(id), "
+                "comment_id INTEGER REFERENCES comments(id)"
+                ")"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO reactions (id, reaction_type, created_at, user_id, entry_id, comment_id) "
+                "SELECT id, reaction_type, created_at, user_id, entry_id, "
+                "       CASE WHEN comment_id IS NULL THEN NULL ELSE comment_id END "
+                "FROM reactions_old"
+            )
+        )
+        conn.execute(text("DROP TABLE reactions_old"))
+
 
 def _default_clause(column) -> str:
     """ALTER TABLE ADD COLUMN에 사용할 NOT NULL/DEFAULT 절 생성."""

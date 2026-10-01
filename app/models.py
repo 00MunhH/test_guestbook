@@ -14,6 +14,32 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _count_reactions(reactions) -> dict[str, int]:
+    counts = {t: 0 for t in REACTION_TYPES}
+    for r in reactions:
+        if r.reaction_type in counts:
+            counts[r.reaction_type] += 1
+    return counts
+
+
+def _user_reaction(reactions, user_id):
+    if user_id is None:
+        return None
+    for r in reactions:
+        if r.user_id == user_id:
+            return r.reaction_type
+    return None
+
+
+def _reactor_names(reactions) -> dict[str, list[str]]:
+    """반응 타입별 참여자 표시 이름 목록."""
+    result = {t: [] for t in REACTION_TYPES}
+    for r in reactions:
+        if r.reaction_type in result and r.user is not None:
+            result[r.reaction_type].append(r.user.shown_name)
+    return result
+
+
 class User(Base):
     """카카오 로그인 사용자."""
 
@@ -74,40 +100,40 @@ class GuestbookEntry(Base):
         return len(self.comments)
 
     def reaction_counts(self) -> dict[str, int]:
-        """반응 타입별 개수 집계."""
-        counts = {t: 0 for t in REACTION_TYPES}
-        for r in self.reactions:
-            if r.reaction_type in counts:
-                counts[r.reaction_type] += 1
-        return counts
+        return _count_reactions(self.reactions)
 
     def user_reaction(self, user_id: int | None) -> str | None:
-        """해당 사용자가 이 글에 남긴 반응 타입 (없으면 None)."""
-        if user_id is None:
-            return None
-        for r in self.reactions:
-            if r.user_id == user_id:
-                return r.reaction_type
-        return None
+        return _user_reaction(self.reactions, user_id)
+
+    def reactor_names(self) -> dict[str, list[str]]:
+        return _reactor_names(self.reactions)
 
 
 class Reaction(Base):
-    """방명록 글에 대한 사용자 반응. 사용자당 글마다 1개(타입 변경 가능)."""
+    """글 또는 댓글에 대한 사용자 반응.
+
+    entry_id가 있으면 글 반응, comment_id가 있으면 댓글/대댓글 반응이다.
+    사용자당 대상(글 또는 댓글)마다 1개(타입 변경 가능). 중복은 앱 레벨에서 제어한다.
+    """
 
     __tablename__ = "reactions"
-    __table_args__ = (
-        UniqueConstraint("user_id", "entry_id", name="uq_reaction_user_entry"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     reaction_type: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    entry_id: Mapped[int] = mapped_column(ForeignKey("guestbook_entries.id"))
+    # 글 반응이면 entry_id, 댓글 반응이면 comment_id 사용 (하나만 채워짐)
+    entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("guestbook_entries.id"), nullable=True, index=True
+    )
+    comment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("comments.id"), nullable=True, index=True
+    )
 
     user: Mapped["User"] = relationship()
     entry: Mapped["GuestbookEntry"] = relationship(back_populates="reactions")
+    comment: Mapped["Comment | None"] = relationship(back_populates="reactions")
 
 
 class Comment(Base):
@@ -139,6 +165,18 @@ class Comment(Base):
     parent: Mapped["Comment | None"] = relationship(
         back_populates="replies", remote_side="Comment.id"
     )
+    reactions: Mapped[list["Reaction"]] = relationship(
+        back_populates="comment", cascade="all, delete-orphan"
+    )
+
+    def reaction_counts(self) -> dict[str, int]:
+        return _count_reactions(self.reactions)
+
+    def user_reaction(self, user_id: int | None) -> str | None:
+        return _user_reaction(self.reactions, user_id)
+
+    def reactor_names(self) -> dict[str, list[str]]:
+        return _reactor_names(self.reactions)
 
 
 class Notification(Base):
