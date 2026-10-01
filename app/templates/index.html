@@ -113,7 +113,7 @@
       <li class="entry" id="entry-{{ entry.id }}">
         <div class="meta">
           {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
-          <span class="name">{{ entry.author.nickname }}</span>
+          <span class="name">{{ entry.author.shown_name }}</span>
           <span class="joined">가입일 {{ entry.author.created_at.strftime("%Y-%m-%d") }}</span>
           <span class="time">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
           {% if user and entry.author_id == user.id %}

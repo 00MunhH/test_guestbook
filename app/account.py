@@ -30,10 +30,13 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 @router.get("/me", response_class=HTMLResponse)
 def my_profile(
     request: Request,
+    saved: int = 0,
     user: User = Depends(require_user),
 ) -> HTMLResponse:
     """내 정보 조회/수정 페이지 (로그인 필요)."""
-    return templates.TemplateResponse(request, "me.html", {"user": user})
+    return templates.TemplateResponse(
+        request, "me.html", {"user": user, "saved": bool(saved)}
+    )
 
 
 @router.post("/me")
@@ -47,7 +50,7 @@ def update_my_profile(
     user.display_name = display_name.strip()[:128]
     user.bio = bio.strip()
     db.commit()
-    return RedirectResponse(url="/me", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/me?saved=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ----- 관리자 페이지 -----
