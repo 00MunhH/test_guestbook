@@ -127,14 +127,21 @@ def notifications_page(
     user: User = Depends(require_user),
 ) -> HTMLResponse:
     """내 알림 목록 (로그인 필요). 조회 시 모두 읽음 처리."""
-    items = list(
+    rows = list(
         db.query(Notification)
         .filter(Notification.user_id == user.id)
         .order_by(Notification.created_at.desc())
         .limit(100)
         .all()
     )
-    # 조회 시 읽음 처리
+    # 이번 조회 시점의 읽음 상태를 보존 (화면에선 방금 들어온 알림을 '안읽음'으로 표시)
+    from .notify import notification_url
+
+    items = [
+        {"n": n, "was_unread": not n.is_read, "url": notification_url(n)} for n in rows
+    ]
+
+    # 조회 후 읽음 처리
     db.query(Notification).filter(
         Notification.user_id == user.id, Notification.is_read.is_(False)
     ).update({Notification.is_read: True})

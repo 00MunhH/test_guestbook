@@ -198,6 +198,15 @@ class Notification(Base):
     comment_id: Mapped[int | None] = mapped_column(
         ForeignKey("comments.id"), nullable=True
     )
+    # 채팅 관련 알림용 (멘션/초대)
+    room_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_rooms.id"), nullable=True
+    )
+    chat_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_messages.id"), nullable=True
+    )
+    # 클릭 시 이동할 URL (지정되면 우선 사용)
+    link: Mapped[str] = mapped_column(String(255), default="")
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -247,7 +256,7 @@ class ChatRoom(Base):
 
 
 class ChatMembership(Base):
-    """채팅방 멤버십."""
+    """채팅방 멤버십. status: invited(초대 대기) / active(수락됨)."""
 
     __tablename__ = "chat_memberships"
     __table_args__ = (
@@ -257,6 +266,9 @@ class ChatMembership(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("chat_rooms.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    # 마지막으로 읽은 메시지 id (읽음 추적용)
+    last_read_message_id: Mapped[int] = mapped_column(default=0)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     room: Mapped["ChatRoom"] = relationship(back_populates="memberships")

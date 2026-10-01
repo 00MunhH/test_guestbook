@@ -11,6 +11,7 @@ from .account import unread_count
 from .auth import require_user
 from .database import get_db
 from .models import Friendship, User
+from .notify import create_notification
 from .timeutils import to_kst
 
 router = APIRouter(tags=["friends"])
@@ -18,6 +19,25 @@ router = APIRouter(tags=["friends"])
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.filters["kst"] = to_kst
+
+
+def relation_label_between(db: Session, viewer_id: int, other_id: int) -> str | None:
+    """viewer가 other에게 지정한 관계 라벨 (친구가 아니면 None).
+
+    라벨은 요청자 기준으로 저장되므로, 양방향 중 존재하는 라벨을 반환한다.
+    """
+    link = db.scalar(
+        select(Friendship).where(
+            Friendship.status == "accepted",
+            or_(
+                (Friendship.requester_id == viewer_id)
+                & (Friendship.addressee_id == other_id),
+                (Friendship.requester_id == other_id)
+                & (Friendship.addressee_id == viewer_id),
+            ),
+        )
+    )
+    return link.relation_label if link else None
 
 
 def accepted_friend_ids(db: Session, user_id: int) -> set[int]:
@@ -130,6 +150,12 @@ def send_request(
             )
         )
         db.commit()
+        # 수신자에게 친구 요청 알림
+        create_notification(
+            db, addressee_id, "friend",
+            f"{user.shown_name}님이 친구 요청을 보냈습니다.",
+            link="/friends",
+        )
     return RedirectResponse(url="/friends", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -154,6 +180,12 @@ def accept_request(
         raise HTTPException(status_code=403, detail="받은 요청만 수락할 수 있습니다.")
     link.status = "accepted"
     db.commit()
+    # 요청자에게 수락 알림
+    create_notification(
+        db, link.requester_id, "friend",
+        f"{user.shown_name}님이 친구 요청을 수락했습니다.",
+        link="/friends",
+    )
     return RedirectResponse(url="/friends", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -165,8 +197,18 @@ def delete_link(
 ) -> RedirectResponse:
     """친구 끊기 / 요청 거절 / 요청 취소 (양쪽 당사자 가능)."""
     link = _get_link_for_user(db, link_id, user.id)
+    # 받은 요청(pending)을 수신자가 거절하는 경우 → 요청자에게 거절 알림
+    notify_target = None
+    if link.status == "pending" and link.addressee_id == user.id:
+        notify_target = link.requester_id
     db.delete(link)
     db.commit()
+    if notify_target is not None:
+        create_notification(
+            db, notify_target, "friend",
+            f"{user.shown_name}님이 친구 요청을 거절했습니다.",
+            link="/friends",
+        )
     return RedirectResponse(url="/friends", status_code=status.HTTP_303_SEE_OTHER)
 
 

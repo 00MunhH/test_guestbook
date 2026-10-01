@@ -1,5 +1,6 @@
-"""그룹 채팅방 라우터: 개설, 친구 초대, 메시지(텍스트/파일), 실시간 SSE."""
+"""그룹 채팅방 라우터: 개설, 친구 초대(승인/거절), 메시지(텍스트/파일), 읽음, 멘션, 실시간 SSE."""
 import asyncio
+import re
 import secrets
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from .account import unread_count
@@ -23,8 +24,9 @@ from .auth import require_user
 from .config import settings
 from .database import get_db
 from .events import broker
-from .friends import accepted_friend_ids
+from .friends import accepted_friend_ids, relation_label_between
 from .models import ChatMembership, ChatMessage, ChatRoom, User
+from .notify import create_notification
 from .timeutils import to_kst
 
 router = APIRouter(tags=["chat"])
@@ -37,21 +39,60 @@ UPLOAD_DIR = Path(settings.upload_dir)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10MB
+MENTION_RE = re.compile(r"@([^\s@]{1,32})")
 
 
-def _require_member(db: Session, room_id: int, user_id: int) -> ChatRoom:
-    """방 존재 + 멤버 여부 확인."""
-    room = db.get(ChatRoom, room_id)
-    if room is None:
-        raise HTTPException(status_code=404, detail="채팅방을 찾을 수 없습니다.")
-    is_member = db.scalar(
+def _membership(db: Session, room_id: int, user_id: int) -> ChatMembership | None:
+    return db.scalar(
         select(ChatMembership).where(
             ChatMembership.room_id == room_id, ChatMembership.user_id == user_id
         )
     )
-    if is_member is None:
+
+
+def _require_active_member(db: Session, room_id: int, user_id: int) -> ChatRoom:
+    """방 존재 + 활성 멤버(수락 완료) 여부 확인."""
+    room = db.get(ChatRoom, room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail="채팅방을 찾을 수 없습니다.")
+    mb = _membership(db, room_id, user_id)
+    if mb is None or mb.status != "active":
         raise HTTPException(status_code=403, detail="이 채팅방의 멤버가 아닙니다.")
     return room
+
+
+def _active_member_ids(db: Session, room_id: int) -> list[int]:
+    return [
+        m.user_id
+        for m in db.scalars(
+            select(ChatMembership).where(
+                ChatMembership.room_id == room_id,
+                ChatMembership.status == "active",
+            )
+        ).all()
+    ]
+
+
+def unread_chat_count(db: Session, user_id: int) -> int:
+    """내가 속한 활성 방들에서 안 읽은 메시지 총합."""
+    total = 0
+    memberships = db.scalars(
+        select(ChatMembership).where(
+            ChatMembership.user_id == user_id, ChatMembership.status == "active"
+        )
+    ).all()
+    for mb in memberships:
+        cnt = db.scalar(
+            select(func.count())
+            .select_from(ChatMessage)
+            .where(
+                ChatMessage.room_id == mb.room_id,
+                ChatMessage.id > mb.last_read_message_id,
+                ChatMessage.sender_id != user_id,
+            )
+        ) or 0
+        total += cnt
+    return total
 
 
 @router.get("/chat", response_class=HTMLResponse)
@@ -60,17 +101,39 @@ def chat_list(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> HTMLResponse:
-    """내가 속한 채팅방 목록 + 방 개설 폼."""
-    rooms = db.scalars(
-        select(ChatRoom)
-        .join(ChatMembership, ChatMembership.room_id == ChatRoom.id)
-        .where(ChatMembership.user_id == user.id)
-        .order_by(ChatRoom.created_at.desc())
+    """내 채팅방 목록(방별 미읽음 수) + 받은 초대."""
+    memberships = db.scalars(
+        select(ChatMembership).where(ChatMembership.user_id == user.id)
     ).all()
+
+    rooms = []  # 활성 방 + 미읽음 수
+    invites = []  # 받은 초대
+    for mb in memberships:
+        room = db.get(ChatRoom, mb.room_id)
+        if room is None:
+            continue
+        if mb.status == "active":
+            unread = db.scalar(
+                select(func.count()).select_from(ChatMessage).where(
+                    ChatMessage.room_id == room.id,
+                    ChatMessage.id > mb.last_read_message_id,
+                    ChatMessage.sender_id != user.id,
+                )
+            ) or 0
+            rooms.append({"room": room, "unread": unread})
+        elif mb.status == "invited":
+            invites.append({"room": room, "membership": mb})
+
+    rooms.sort(key=lambda r: r["room"].created_at, reverse=True)
     return templates.TemplateResponse(
         request,
         "chat_list.html",
-        {"user": user, "rooms": list(rooms), "unread": unread_count(db, user)},
+        {
+            "user": user,
+            "rooms": rooms,
+            "invites": invites,
+            "unread": unread_count(db, user),
+        },
     )
 
 
@@ -80,13 +143,13 @@ def create_room(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """채팅방 개설 (개설자는 자동 멤버)."""
+    """채팅방 개설 (개설자는 자동 활성 멤버)."""
     room_name = name.strip()[:128] or "새 채팅방"
     room = ChatRoom(name=room_name, owner_id=user.id)
     db.add(room)
     db.commit()
     db.refresh(room)
-    db.add(ChatMembership(room_id=room.id, user_id=user.id))
+    db.add(ChatMembership(room_id=room.id, user_id=user.id, status="active"))
     db.commit()
     return RedirectResponse(url=f"/chat/{room.id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -95,27 +158,53 @@ def create_room(
 def chat_room(
     room_id: int,
     request: Request,
+    focus: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> HTMLResponse:
-    """채팅방 상세: 메시지 목록 + 입력 + 초대 가능한 친구."""
-    room = _require_member(db, room_id, user.id)
+    """채팅방 상세. 진입 시 읽음 처리."""
+    room = _require_active_member(db, room_id, user.id)
+    mb = _membership(db, room_id, user.id)
 
-    member_ids = {
-        m.user_id
-        for m in db.scalars(
+    active_ids = _active_member_ids(db, room_id)
+    invitable = [
+        db.get(User, fid)
+        for fid in accepted_friend_ids(db, user.id)
+        if fid not in {m.user_id for m in db.scalars(
             select(ChatMembership).where(ChatMembership.room_id == room_id)
-        ).all()
-    }
-    # 초대 가능한 친구 = 내 친구 중 아직 멤버가 아닌 사람
-    invitable = []
-    for fid in accepted_friend_ids(db, user.id):
-        if fid not in member_ids:
-            u = db.get(User, fid)
-            if u:
-                invitable.append(u)
+        ).all()}
+    ]
+    invitable = [u for u in invitable if u]
 
-    members = [db.get(User, mid) for mid in member_ids]
+    members = []
+    for mid in active_ids:
+        u = db.get(User, mid)
+        if u:
+            members.append({"user": u, "relation": relation_label_between(db, user.id, mid)})
+
+    messages = list(room.messages)
+
+    # 메시지별 읽은 사람 수: last_read_message_id >= 메시지id 인 활성 멤버 수
+    memberships = db.scalars(
+        select(ChatMembership).where(
+            ChatMembership.room_id == room_id, ChatMembership.status == "active"
+        )
+    ).all()
+    read_counts = {}
+    for msg in messages:
+        read_counts[msg.id] = sum(
+            1 for m in memberships if m.last_read_message_id >= msg.id
+        )
+
+    # 멘션 자동완성용 멤버 이름
+    member_names = [m["user"].shown_name for m in members]
+
+    # 읽음 처리: 마지막 메시지까지 읽은 것으로
+    if messages:
+        last_id = messages[-1].id
+        if mb.last_read_message_id < last_id:
+            mb.last_read_message_id = last_id
+            db.commit()
 
     return templates.TemplateResponse(
         request,
@@ -123,10 +212,14 @@ def chat_room(
         {
             "user": user,
             "room": room,
-            "messages": room.messages,
+            "messages": messages,
             "members": members,
+            "member_names": member_names,
+            "read_counts": read_counts,
+            "member_total": len(active_ids),
             "invitable": invitable,
             "is_owner": room.owner_id == user.id,
+            "focus": focus,
         },
     )
 
@@ -138,22 +231,52 @@ def invite_member(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """사이 맺은 친구를 방에 초대 (멤버만 초대 가능)."""
-    _require_member(db, room_id, user.id)
+    """사이 맺은 친구를 초대 (invited 상태 + 알림). 활성 멤버만 초대 가능."""
+    room = _require_active_member(db, room_id, user.id)
 
-    # 초대 대상이 실제 내 친구인지 확인
     if friend_id not in accepted_friend_ids(db, user.id):
         raise HTTPException(status_code=400, detail="사이 맺은 친구만 초대할 수 있습니다.")
 
-    already = db.scalar(
-        select(ChatMembership).where(
-            ChatMembership.room_id == room_id, ChatMembership.user_id == friend_id
-        )
-    )
-    if already is None:
-        db.add(ChatMembership(room_id=room_id, user_id=friend_id))
+    existing = _membership(db, room_id, friend_id)
+    if existing is None:
+        db.add(ChatMembership(room_id=room_id, user_id=friend_id, status="invited"))
         db.commit()
+        create_notification(
+            db, friend_id, "chat_invite",
+            f"{user.shown_name}님이 '{room.name}' 채팅방에 초대했습니다.",
+            link="/chat", room_id=room_id,
+        )
     return RedirectResponse(url=f"/chat/{room_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/chat/{room_id}/invite/accept")
+def accept_invite(
+    room_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """채팅방 초대 수락."""
+    mb = _membership(db, room_id, user.id)
+    if mb is None or mb.status != "invited":
+        raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다.")
+    mb.status = "active"
+    db.commit()
+    return RedirectResponse(url=f"/chat/{room_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/chat/{room_id}/invite/decline")
+def decline_invite(
+    room_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> RedirectResponse:
+    """채팅방 초대 거절."""
+    mb = _membership(db, room_id, user.id)
+    if mb is None or mb.status != "invited":
+        raise HTTPException(status_code=404, detail="초대를 찾을 수 없습니다.")
+    db.delete(mb)
+    db.commit()
+    return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/chat/{room_id}/leave")
@@ -163,17 +286,13 @@ def leave_room(
     user: User = Depends(require_user),
 ) -> RedirectResponse:
     """방 나가기. 방장이 나가면 방 삭제."""
-    room = _require_member(db, room_id, user.id)
+    room = _require_active_member(db, room_id, user.id)
     if room.owner_id == user.id:
-        db.delete(room)  # cascade로 멤버십/메시지 삭제
+        db.delete(room)
     else:
-        membership = db.scalar(
-            select(ChatMembership).where(
-                ChatMembership.room_id == room_id, ChatMembership.user_id == user.id
-            )
-        )
-        if membership:
-            db.delete(membership)
+        mb = _membership(db, room_id, user.id)
+        if mb:
+            db.delete(mb)
     db.commit()
     return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -186,8 +305,8 @@ async def send_message(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """메시지 전송 (텍스트 또는 파일). 멤버만 가능."""
-    _require_member(db, room_id, user.id)
+    """메시지 전송 (텍스트/파일). 활성 멤버만. 멘션 시 알림."""
+    room = _require_active_member(db, room_id, user.id)
 
     text = body.strip()
     stored_name = ""
@@ -208,15 +327,33 @@ async def send_message(
         )
 
     msg = ChatMessage(
-        room_id=room_id,
-        sender_id=user.id,
-        body=text,
-        file_name=stored_name,
-        original_name=original_name,
+        room_id=room_id, sender_id=user.id, body=text,
+        file_name=stored_name, original_name=original_name,
     )
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # 보낸 사람은 자기 메시지를 읽은 것으로
+    mb = _membership(db, room_id, user.id)
+    if mb and mb.last_read_message_id < msg.id:
+        mb.last_read_message_id = msg.id
+        db.commit()
+
+    # 멘션 처리: @이름 → 활성 멤버 중 일치하는 사람에게 알림
+    if text:
+        mentioned = {m.group(1) for m in MENTION_RE.finditer(text)}
+        if mentioned:
+            for mid in _active_member_ids(db, room_id):
+                if mid == user.id:
+                    continue
+                mu = db.get(User, mid)
+                if mu and mu.shown_name in mentioned:
+                    create_notification(
+                        db, mid, "mention",
+                        f"{user.shown_name}님이 '{room.name}'에서 회원님을 언급했습니다: {text[:40]}",
+                        room_id=room_id, chat_message_id=msg.id,
+                    )
 
     await broker.publish(
         {
@@ -242,8 +379,8 @@ def download_file(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> FileResponse:
-    """첨부 파일 다운로드 (방 멤버만)."""
-    _require_member(db, room_id, user.id)
+    """첨부 파일 다운로드 (활성 멤버만)."""
+    _require_active_member(db, room_id, user.id)
     msg = db.get(ChatMessage, message_id)
     if msg is None or msg.room_id != room_id or not msg.file_name:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
@@ -262,8 +399,8 @@ async def chat_events(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> StreamingResponse:
-    """방별 실시간 메시지 스트림 (멤버만)."""
-    _require_member(db, room_id, user.id)
+    """방별 실시간 메시지 스트림 (활성 멤버만)."""
+    _require_active_member(db, room_id, user.id)
 
     async def gen():
         import json
@@ -276,7 +413,6 @@ async def chat_events(
                     break
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=15)
-                    # 이 방의 chat 이벤트만 전달
                     try:
                         ev = json.loads(data)
                     except ValueError:

@@ -5,8 +5,10 @@
 {% block head_extra %}
 <style>
   ul.notis { list-style: none; padding: 0; margin: 0; }
-  ul.notis li { background: #fff; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  ul.notis li.unread { border-left: 3px solid #fab005; }
+  ul.notis li { padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  /* 안 읽은 알림: 하늘색 배경 / 읽은 알림: 옅은 회색 */
+  ul.notis li.unread { background: #e7f5ff; border-left: 3px solid #4dabf7; }
+  ul.notis li.read { background: #f1f3f5; }
   .notis .msg { font-size: 14px; line-height: 1.5; }
   .notis .time { color: #aaa; font-size: 12px; margin-top: 4px; }
   .notis .empty { color: #999; text-align: center; padding: 40px 0; }
@@ -17,18 +19,10 @@
 {% block content %}
   <h1 class="page-title">🔔 알림</h1>
   <ul class="notis">
-    {% for n in items %}
-      <li class="{% if not n.is_read %}unread{% endif %}">
-        <div class="msg">
-          {% if n.comment_id %}
-            <a href="/?focus={{ n.comment_id }}#comment-{{ n.comment_id }}">{{ n.message }}</a>
-          {% elif n.entry_id %}
-            <a href="/#entry-{{ n.entry_id }}">{{ n.message }}</a>
-          {% else %}
-            {{ n.message }}
-          {% endif %}
-        </div>
-        <div class="time">{{ n.created_at | kst }}</div>
+    {% for item in items %}
+      <li class="{% if item.was_unread %}unread{% else %}read{% endif %}">
+        <div class="msg"><a href="{{ item.url }}">{{ item.n.message }}</a></div>
+        <div class="time">{{ item.n.created_at | kst }}</div>
       </li>
     {% else %}
       <li class="empty">알림이 없습니다.</li>

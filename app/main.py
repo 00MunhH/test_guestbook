@@ -70,6 +70,24 @@ def home(
         .limit(PER_PAGE)
     )
     entries = list(db.scalars(stmt).all())
+
+    # 친구 추가 진입점용: 내 친구 id 집합 + 이미 요청/관계 있는 상대 집합
+    friend_ids: set[int] = set()
+    related_ids: set[int] = set()
+    if user is not None:
+        from .friends import accepted_friend_ids
+        from .models import Friendship
+        from sqlalchemy import or_ as _or
+
+        friend_ids = accepted_friend_ids(db, user.id)
+        links = db.scalars(
+            select(Friendship).where(
+                _or(Friendship.requester_id == user.id, Friendship.addressee_id == user.id)
+            )
+        ).all()
+        for f in links:
+            related_ids.add(f.addressee_id if f.requester_id == user.id else f.requester_id)
+
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -81,5 +99,7 @@ def home(
             "page": page,
             "total_pages": total_pages,
             "total_entries": total,
+            "friend_ids": friend_ids,
+            "related_ids": related_ids,
         },
     )
