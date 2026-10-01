@@ -31,8 +31,60 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """테이블 생성 (앱 시작 시 호출)."""
+    """테이블 생성 + 간단한 자동 마이그레이션 (앱 시작 시 호출)."""
     # 모델이 Base에 등록되도록 import
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _auto_migrate()
+
+
+def _auto_migrate() -> None:
+    """모델에는 있으나 기존 테이블에 없는 컬럼을 자동으로 추가한다 (SQLite).
+
+    버전 업그레이드 시 기존 DB에서 발생하는 'no such column' 오류를 방지한다.
+    새 컬럼은 NOT NULL + 기본값으로 추가하므로 기존 행에도 안전하게 적용된다.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all이 이미 생성함
+            db_columns = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in db_columns:
+                    continue
+                col_type = column.type.compile(dialect=engine.dialect)
+                default_sql = _default_clause(column)
+                ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}{default_sql}'
+                conn.execute(text(ddl))
+
+
+def _default_clause(column) -> str:
+    """ALTER TABLE ADD COLUMN에 사용할 NOT NULL/DEFAULT 절 생성."""
+    import datetime
+
+    from sqlalchemy import Boolean, DateTime, Integer, Numeric
+
+    if column.nullable:
+        return ""
+
+    py_type = None
+    try:
+        py_type = column.type.python_type
+    except (NotImplementedError, AttributeError):
+        pass
+
+    if isinstance(column.type, Boolean):
+        default = "0"
+    elif isinstance(column.type, (Integer, Numeric)):
+        default = "0"
+    elif isinstance(column.type, DateTime) or py_type is datetime.datetime:
+        default = "CURRENT_TIMESTAMP"
+    else:
+        default = "''"
+    return f" NOT NULL DEFAULT {default}"

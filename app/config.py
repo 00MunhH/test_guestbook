@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # 최초 관리자로 부트스트랩할 카카오 ID 목록 (쉼표 구분)
     admin_kakao_ids: str = ""
 
+    # 카카오와 무관한 기본 관리자 계정 (ID/비밀번호 로그인)
+    admin_username: str = ""
+    admin_password: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

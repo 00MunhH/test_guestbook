@@ -1,10 +1,12 @@
 """카카오 OAuth 2.0 로그인 라우터 및 인증 유틸리티."""
 import secrets
+from pathlib import Path
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,9 +16,46 @@ from .models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_BASE_DIR = Path(__file__).resolve().parent
+_admin_templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
+
 KAKAO_AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize"
 KAKAO_TOKEN_URL = "https://kauth.kakao.com/oauth/token"
 KAKAO_USERINFO_URL = "https://kapi.kakao.com/v2/user/me"
+
+# 카카오와 무관한 로컬 관리자 계정의 kakao_id 접두사
+LOCAL_ADMIN_PREFIX = "local:"
+
+
+def ensure_local_admin() -> None:
+    """.env의 ADMIN_USERNAME/PASSWORD로 기본 관리자 계정을 DB에 보장한다.
+
+    앱 시작 시 호출. 계정이 없으면 생성하고, 있으면 관리자 플래그를 유지한다.
+    카카오 로그인 없이 /admin/login으로 접속하기 위한 계정이다.
+    """
+    from .database import SessionLocal
+
+    username = settings.admin_username.strip()
+    if not username:
+        return
+
+    kakao_id = f"{LOCAL_ADMIN_PREFIX}{username}"
+    db = SessionLocal()
+    try:
+        admin = db.scalar(select(User).where(User.kakao_id == kakao_id))
+        if admin is None:
+            admin = User(
+                kakao_id=kakao_id,
+                nickname=username,
+                display_name=username,
+                is_admin=True,
+            )
+            db.add(admin)
+        else:
+            admin.is_admin = True  # 기본 관리자는 항상 관리자 유지
+        db.commit()
+    finally:
+        db.close()
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
@@ -158,3 +197,53 @@ def logout(request: Request) -> RedirectResponse:
     """세션 로그아웃."""
     request.session.clear()
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ----- 기본 관리자(ID/PW) 로그인: 카카오 무관 -----
+@router.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(request: Request, error: str | None = None) -> HTMLResponse:
+    """관리자 로컬 로그인 페이지."""
+    enabled = bool(settings.admin_username and settings.admin_password)
+    return _admin_templates.TemplateResponse(
+        request,
+        "admin_login.html",
+        {"enabled": enabled, "error": error},
+    )
+
+
+@router.post("/admin/login")
+def admin_login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """ID/비밀번호로 기본 관리자 로그인 (카카오 무관)."""
+    cfg_user = settings.admin_username.strip()
+    cfg_pw = settings.admin_password
+
+    ok = bool(cfg_user) and bool(cfg_pw)
+    ok = ok and secrets.compare_digest(username.strip(), cfg_user)
+    ok = ok and secrets.compare_digest(password, cfg_pw)
+    if not ok:
+        return RedirectResponse(
+            url="/auth/admin/login?error=1", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    admin = db.scalar(
+        select(User).where(User.kakao_id == f"{LOCAL_ADMIN_PREFIX}{cfg_user}")
+    )
+    if admin is None:
+        # 혹시 부트스트랩이 안 되어 있으면 생성
+        admin = User(
+            kakao_id=f"{LOCAL_ADMIN_PREFIX}{cfg_user}",
+            nickname=cfg_user,
+            display_name=cfg_user,
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+
+    request.session["user_id"] = admin.id
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)

@@ -21,8 +21,9 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 앱 시작 시 테이블 생성
+    # 앱 시작 시 테이블 생성/자동 마이그레이션 + 기본 관리자 보장
     init_db()
+    auth.ensure_local_admin()
     yield
 
 
