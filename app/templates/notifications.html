@@ -1,34 +1,22 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>알림</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      max-width: 640px; margin: 0 auto; padding: 24px; color: #222; background: #fafafa;
-    }
-    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-    h1 { font-size: 22px; margin: 0; }
-    a { color: #3b5bdb; text-decoration: none; }
-    .back-link { font-weight: 600; font-size: 15px; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { background: #fff; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-    li.unread { border-left: 3px solid #fab005; }
-    .msg { font-size: 14px; line-height: 1.5; }
-    .time { color: #aaa; font-size: 12px; margin-top: 4px; }
-    .empty { color: #999; text-align: center; padding: 40px 0; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🔔 알림</h1>
-    <nav><a href="/" class="back-link">← YJ</a></nav>
-  </header>
+{% extends "layout.html" %}
+{% set active_nav = 'notifications' %}
+{% block title %}알림{% endblock %}
 
-  <ul>
+{% block head_extra %}
+<style>
+  ul.notis { list-style: none; padding: 0; margin: 0; }
+  ul.notis li { background: #fff; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  ul.notis li.unread { border-left: 3px solid #fab005; }
+  .notis .msg { font-size: 14px; line-height: 1.5; }
+  .notis .time { color: #aaa; font-size: 12px; margin-top: 4px; }
+  .notis .empty { color: #999; text-align: center; padding: 40px 0; }
+  .notis a { color: #3b5bdb; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">🔔 알림</h1>
+  <ul class="notis">
     {% for n in items %}
       <li class="{% if not n.is_read %}unread{% endif %}">
         <div class="msg">
@@ -46,5 +34,4 @@
       <li class="empty">알림이 없습니다.</li>
     {% endfor %}
   </ul>
-</body>
-</html>
+{% endblock %}

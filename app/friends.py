@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from .account import unread_count
 from .auth import require_user
 from .database import get_db
 from .models import Friendship, User
@@ -89,6 +90,7 @@ def friends_page(
             "outgoing": outgoing,
             "q": q or "",
             "search_results": search_results,
+            "unread": unread_count(db, user),
         },
     )
 

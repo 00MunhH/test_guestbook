@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from .account import unread_count
 from .auth import require_user
 from .config import settings
 from .database import get_db
@@ -67,7 +68,9 @@ def chat_list(
         .order_by(ChatRoom.created_at.desc())
     ).all()
     return templates.TemplateResponse(
-        request, "chat_list.html", {"user": user, "rooms": list(rooms)}
+        request,
+        "chat_list.html",
+        {"user": user, "rooms": list(rooms), "unread": unread_count(db, user)},
     )
 
 

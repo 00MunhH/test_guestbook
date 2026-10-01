@@ -33,11 +33,14 @@ templates.env.filters["kst"] = to_kst
 def my_profile(
     request: Request,
     saved: int = 0,
+    db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> HTMLResponse:
     """내 정보 조회/수정 페이지 (로그인 필요)."""
     return templates.TemplateResponse(
-        request, "me.html", {"user": user, "saved": bool(saved)}
+        request,
+        "me.html",
+        {"user": user, "saved": bool(saved), "unread": unread_count(db, user)},
     )
 
 
@@ -67,7 +70,7 @@ def admin_members(
     return templates.TemplateResponse(
         request,
         "admin.html",
-        {"user": admin, "members": members},
+        {"user": admin, "members": members, "unread": unread_count(db, admin)},
     )
 
 
@@ -137,7 +140,7 @@ def notifications_page(
     ).update({Notification.is_read: True})
     db.commit()
     return templates.TemplateResponse(
-        request, "notifications.html", {"user": user, "items": items}
+        request, "notifications.html", {"user": user, "items": items, "unread": 0}
     )
 
 

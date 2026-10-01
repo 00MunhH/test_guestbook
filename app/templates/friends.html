@@ -1,49 +1,34 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>사이 맺기 · 친구</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      max-width: 680px; margin: 0 auto; padding: 24px; color: #222; background: #fafafa;
-    }
-    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    h1 { font-size: 22px; margin: 0; }
-    a { color: #3b5bdb; text-decoration: none; }
-    .back-link { font-weight: 600; font-size: 15px; }
-    h2 { font-size: 15px; color: #666; margin: 22px 0 10px; }
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); padding: 8px 14px; }
-    .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f3f3f3; }
-    .row:last-child { border-bottom: none; }
-    .row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
-    .row .info { flex: 1; min-width: 0; }
-    .row .name { font-weight: 600; font-size: 14px; }
-    .row .label { color: #868e96; font-size: 12px; }
-    .btn { padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; }
-    .btn-primary { background: #191600; color: #fff; }
-    .btn-accept { background: #e7f5ff; color: #1971c2; }
-    .btn-del { background: #fff5f5; color: #c92a2a; }
-    .search { display: flex; gap: 8px; margin: 6px 0 2px; }
-    .search input { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
-    .inline { display: inline; margin: 0; }
-    .label-form { display: flex; gap: 6px; align-items: center; }
-    .label-form input { width: 90px; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; font-size: 12px; }
-    .empty { color: #aaa; font-size: 13px; padding: 10px 0; }
-    .relation-input { width: 90px; border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🤝 사이 맺기</h1>
-    <nav><a href="/" class="back-link">← YJ</a></nav>
-  </header>
+{% extends "layout.html" %}
+{% set active_nav = 'friends' %}
+{% block title %}사이 맺기 · 친구{% endblock %}
 
-  <!-- 사용자 검색 -->
-  <h2>사용자 찾기</h2>
-  <div class="card">
+{% block head_extra %}
+<style>
+  h2.sec { font-size: 15px; color: #666; margin: 22px 0 10px; }
+  .fcard { padding: 8px 14px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f3f3f3; flex-wrap: wrap; }
+  .row:last-child { border-bottom: none; }
+  .row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
+  .row .info { flex: 1; min-width: 120px; }
+  .row .name { font-weight: 600; font-size: 14px; }
+  .row .label { color: #868e96; font-size: 12px; }
+  .btn-accept { background: #e7f5ff; color: #1971c2; }
+  .btn-del { background: #fff5f5; color: #c92a2a; }
+  .btn-s { padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; }
+  .search { display: flex; gap: 8px; margin: 6px 0 2px; }
+  .search input { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+  .inline { display: inline; margin: 0; }
+  .label-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .relation-input { width: 100px; border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .empty { color: #aaa; font-size: 13px; padding: 10px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">🤝 사이 맺기</h1>
+
+  <h2 class="sec">사용자 찾기</h2>
+  <div class="card fcard">
     <form class="search" action="/friends" method="get">
       <input type="text" name="q" value="{{ q }}" placeholder="닉네임 또는 표시 이름 검색" />
       <button class="btn btn-primary" type="submit">검색</button>
@@ -55,7 +40,7 @@
         <form class="inline label-form" action="/friends/request" method="post">
           <input type="hidden" name="addressee_id" value="{{ u.id }}" />
           <input class="relation-input" type="text" name="relation_label" value="친구" title="관계 (예: 친구, 동료)" />
-          <button class="btn btn-primary" type="submit">요청</button>
+          <button class="btn-s btn-accept" type="submit">요청</button>
         </form>
       </div>
     {% endfor %}
@@ -64,10 +49,9 @@
     {% endif %}
   </div>
 
-  <!-- 받은 요청 -->
   {% if incoming %}
-  <h2>받은 요청 ({{ incoming | length }})</h2>
-  <div class="card">
+  <h2 class="sec">받은 요청 ({{ incoming | length }})</h2>
+  <div class="card fcard">
     {% for f, other in incoming %}
       <div class="row">
         {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
@@ -76,32 +60,31 @@
           <div class="label">관계: {{ f.relation_label }}</div>
         </div>
         <form class="inline" action="/friends/{{ f.id }}/accept" method="post">
-          <button class="btn btn-accept" type="submit">수락</button>
+          <button class="btn-s btn-accept" type="submit">수락</button>
         </form>
         <form class="inline" action="/friends/{{ f.id }}/delete" method="post">
-          <button class="btn btn-del" type="submit">거절</button>
+          <button class="btn-s btn-del" type="submit">거절</button>
         </form>
       </div>
     {% endfor %}
   </div>
   {% endif %}
 
-  <!-- 내 친구 -->
-  <h2>내 친구 ({{ friends | length }})</h2>
-  <div class="card">
+  <h2 class="sec">내 친구 ({{ friends | length }})</h2>
+  <div class="card fcard">
     {% for f, other in friends %}
       <div class="row">
         {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
         <div class="info">
           <div class="name">{{ other.shown_name }}</div>
           <form class="label-form" action="/friends/{{ f.id }}/label" method="post">
-            <input type="text" name="relation_label" value="{{ f.relation_label }}" />
-            <button class="btn btn-accept" type="submit">관계 저장</button>
+            <input class="relation-input" type="text" name="relation_label" value="{{ f.relation_label }}" />
+            <button class="btn-s btn-accept" type="submit">관계 저장</button>
           </form>
         </div>
         <form class="inline" action="/friends/{{ f.id }}/delete" method="post"
               onsubmit="return confirm('{{ other.shown_name }}님과의 사이를 끊을까요?');">
-          <button class="btn btn-del" type="submit">끊기</button>
+          <button class="btn-s btn-del" type="submit">끊기</button>
         </form>
       </div>
     {% else %}
@@ -109,10 +92,9 @@
     {% endfor %}
   </div>
 
-  <!-- 보낸 요청 -->
   {% if outgoing %}
-  <h2>보낸 요청 ({{ outgoing | length }})</h2>
-  <div class="card">
+  <h2 class="sec">보낸 요청 ({{ outgoing | length }})</h2>
+  <div class="card fcard">
     {% for f, other in outgoing %}
       <div class="row">
         {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
@@ -121,11 +103,10 @@
           <div class="label">대기 중 · 관계: {{ f.relation_label }}</div>
         </div>
         <form class="inline" action="/friends/{{ f.id }}/delete" method="post">
-          <button class="btn btn-del" type="submit">취소</button>
+          <button class="btn-s btn-del" type="submit">취소</button>
         </form>
       </div>
     {% endfor %}
   </div>
   {% endif %}
-</body>
-</html>
+{% endblock %}
