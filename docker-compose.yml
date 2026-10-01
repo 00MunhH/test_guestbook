@@ -1,0 +1,18 @@
+services:
+  web:
+    build: .
+    image: guestbook:latest
+    container_name: guestbook
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 컨테이너 내부 볼륨 경로로 DB 저장 (env_file 값보다 우선)
+      DATABASE_URL: sqlite:////data/guestbook.db
+    volumes:
+      - guestbook_data:/data
+    restart: unless-stopped
+
+volumes:
+  guestbook_data:

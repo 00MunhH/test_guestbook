@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 환경변수 / 시크릿 (이미지에 포함 금지)
+.env
+
+# 로컬 데이터베이스
+*.db
+*.sqlite3
+
+# 문서/개발용
+README.md
+query_db.py
+
+# IDE
+.vscode/
+.idea/
