@@ -1,6 +1,6 @@
 """방명록 라우터: 조회는 공개, 작성은 로그인 필요."""
-from fastapi import APIRouter, Depends, Form, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +10,22 @@ from .database import get_db
 from .events import broker
 from .models import REACTION_TYPES, Comment, GuestbookEntry, Notification, Reaction, User
 from .timeutils import to_kst
+
+
+def _wants_json(request: Request) -> bool:
+    """AJAX(fetch) 요청인지 판별."""
+    return request.headers.get("x-requested-with") == "fetch" or (
+        "application/json" in request.headers.get("accept", "")
+    )
+
+
+def _reaction_state(obj, user_id: int | None) -> dict:
+    """반응 버튼 갱신용 상태 (집계/내 반응/참여자)."""
+    return {
+        "counts": obj.reaction_counts(),
+        "my_reaction": obj.user_reaction(user_id),
+        "reactors": obj.reactor_names(),
+    }
 
 router = APIRouter(tags=["guestbook"])
 
@@ -119,12 +135,16 @@ def _notify_reaction(db, target_id, actor_name, label, entry_id, comment_id, whe
 # ----- 글 반응 (좋아요/싫어요/감사해요) -----
 @router.post("/entries/{entry_id}/react")
 def react_entry(
+    request: Request,
     entry_id: int,
     reaction_type: str = Form(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
-) -> RedirectResponse:
-    """글 반응 토글 (로그인 필요). 새 반응이면 글 작성자에게 알림."""
+):
+    """글 반응 토글 (로그인 필요). 새 반응이면 글 작성자에게 알림.
+
+    AJAX 요청이면 JSON(집계/내 반응/참여자) 반환, 아니면 리다이렉트(JS 미사용 fallback).
+    """
     if reaction_type not in REACTION_TYPES:
         raise HTTPException(status_code=400, detail="알 수 없는 반응 타입입니다.")
 
@@ -154,18 +174,25 @@ def react_entry(
             entry_id, None, "글",
         )
     db.commit()
+    db.refresh(entry)
+    if _wants_json(request):
+        return JSONResponse(_reaction_state(entry, user.id))
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ----- 댓글/대댓글 반응 -----
 @router.post("/comments/{comment_id}/react")
 def react_comment(
+    request: Request,
     comment_id: int,
     reaction_type: str = Form(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
-) -> RedirectResponse:
-    """댓글/대댓글 반응 토글 (로그인 필요). 새 반응이면 댓글 작성자에게 알림."""
+):
+    """댓글/대댓글 반응 토글 (로그인 필요). 새 반응이면 댓글 작성자에게 알림.
+
+    AJAX 요청이면 JSON 반환, 아니면 리다이렉트(fallback).
+    """
     if reaction_type not in REACTION_TYPES:
         raise HTTPException(status_code=400, detail="알 수 없는 반응 타입입니다.")
 
@@ -195,6 +222,9 @@ def react_comment(
             comment.entry_id, comment_id, "댓글",
         )
     db.commit()
+    db.refresh(comment)
+    if _wants_json(request):
+        return JSONResponse(_reaction_state(comment, user.id))
     return RedirectResponse(
         url=f"/#comment-{comment_id}", status_code=status.HTTP_303_SEE_OTHER
     )

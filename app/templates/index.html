@@ -78,20 +78,21 @@
     {% set counts = obj.reaction_counts() %}
     {% set my_reaction = obj.user_reaction(user.id) if user else None %}
     {% set names = obj.reactor_names() %}
-    <div class="reactions">
+    <div class="reactions" data-react-url="/{{ target_type }}/{{ obj_id }}/react">
       {% for rtype, emoji, label in reaction_labels %}
         {% set who = names[rtype] | join(', ') %}
         {% set tip = label + (' · ' + who if who else '') %}
         {% if user %}
-          <form action="/{{ target_type }}/{{ obj_id }}/react" method="post">
+          <form action="/{{ target_type }}/{{ obj_id }}/react" method="post" class="react-form">
             <input type="hidden" name="reaction_type" value="{{ rtype }}" />
-            <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit" title="{{ tip }}">
+            <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit"
+                    title="{{ tip }}" data-rtype="{{ rtype }}" data-label="{{ label }}">
               <span>{{ emoji }}</span><span>{{ label }}</span>
               <span class="count">{{ counts[rtype] }}</span>
             </button>
           </form>
         {% else %}
-          <span class="react-btn disabled" title="{{ tip }}">
+          <span class="react-btn disabled" title="{{ tip }}" data-rtype="{{ rtype }}" data-label="{{ label }}">
             <span>{{ emoji }}</span><span>{{ label }}</span>
             <span class="count">{{ counts[rtype] }}</span>
           </span>
@@ -234,6 +235,39 @@
       if (!btn) return;
       var form = document.getElementById(btn.getAttribute("data-target"));
       if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
+    });
+
+    // 리액션: AJAX로 처리해 스크롤 위치를 유지한다 (페이지 이동 없음)
+    function renderReactions(container, state) {
+      container.querySelectorAll(".react-btn").forEach(function (btn) {
+        var rt = btn.getAttribute("data-rtype");
+        var label = btn.getAttribute("data-label");
+        var cnt = (state.counts && state.counts[rt]) || 0;
+        var countEl = btn.querySelector(".count");
+        if (countEl) countEl.textContent = cnt;
+        if (state.my_reaction === rt) btn.classList.add("active");
+        else btn.classList.remove("active");
+        var who = (state.reactors && state.reactors[rt]) ? state.reactors[rt].join(", ") : "";
+        btn.setAttribute("title", label + (who ? " · " + who : ""));
+      });
+    }
+
+    document.addEventListener("submit", function (e) {
+      var form = e.target.closest(".react-form");
+      if (!form) return;
+      e.preventDefault();  // 새로고침/이동 방지
+      var container = form.closest(".reactions");
+      var url = form.getAttribute("action");
+      var fd = new FormData(form);
+      fetch(url, {
+        method: "POST",
+        headers: { "X-Requested-With": "fetch" },
+        body: fd,
+        credentials: "same-origin",
+      })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (state) { if (container) renderReactions(container, state); })
+        .catch(function () { /* 실패 시 조용히 무시 (스크롤 유지 우선) */ });
     });
 
     function flash(el) {
