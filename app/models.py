@@ -113,3 +113,28 @@ class Comment(Base):
 
     author: Mapped["User"] = relationship()
     entry: Mapped["GuestbookEntry"] = relationship(back_populates="comments")
+
+
+class Notification(Base):
+    """인앱 알림 (예: 내 글에 댓글이 달림)."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # 알림을 받는 사용자
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # 알림 종류 (현재는 'comment')
+    kind: Mapped[str] = mapped_column(String(32), default="comment")
+    # 알림 메시지 (렌더링용 요약)
+    message: Mapped[str] = mapped_column(Text, default="")
+    # 연결 대상
+    entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("guestbook_entries.id"), nullable=True
+    )
+    comment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("comments.id"), nullable=True
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    user: Mapped["User"] = relationship()

@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import account, auth, guestbook
+from . import account, auth, events, guestbook
+from .account import unread_count
 from .auth import get_current_user
 from .config import settings
 from .database import get_db, init_db
@@ -36,6 +37,7 @@ app.add_middleware(SessionMiddleware, secret_key=settings.session_secret_key)
 app.include_router(auth.router)
 app.include_router(guestbook.router)
 app.include_router(account.router)
+app.include_router(events.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -50,5 +52,10 @@ def home(
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"entries": entries, "user": user},
+        {
+            "entries": entries,
+            "user": user,
+            "unread": unread_count(db, user),
+            "current_user_id": user.id if user else None,
+        },
     )

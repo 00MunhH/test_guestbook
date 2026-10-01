@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from .auth import require_user
 from .database import get_db
-from .models import REACTION_TYPES, Comment, GuestbookEntry, Reaction, User
+from .events import broker
+from .models import REACTION_TYPES, Comment, GuestbookEntry, Notification, Reaction, User
 
 router = APIRouter(tags=["guestbook"])
 
@@ -136,20 +137,55 @@ def react_entry(
 
 # ----- 댓글 -----
 @router.post("/entries/{entry_id}/comments")
-def create_comment(
+async def create_comment(
     entry_id: int,
     message: str = Form(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ) -> RedirectResponse:
-    """댓글 작성 (로그인 필요)."""
+    """댓글 작성 (로그인 필요).
+
+    - 글 작성자(본인 제외)에게 인앱 알림 생성
+    - SSE로 실시간 댓글 이벤트 브로드캐스트
+    """
     entry = db.get(GuestbookEntry, entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="방명록을 찾을 수 없습니다.")
     text = message.strip()
     if text:
-        db.add(Comment(message=text, author_id=user.id, entry_id=entry_id))
+        comment = Comment(message=text, author_id=user.id, entry_id=entry_id)
+        db.add(comment)
         db.commit()
+        db.refresh(comment)
+
+        author_name = user.shown_name
+
+        # 글 작성자에게 알림 (본인 댓글은 제외)
+        if entry.author_id != user.id:
+            db.add(
+                Notification(
+                    user_id=entry.author_id,
+                    kind="comment",
+                    message=f"{author_name}님이 회원님의 글에 댓글을 남겼습니다: {text[:40]}",
+                    entry_id=entry_id,
+                    comment_id=comment.id,
+                )
+            )
+            db.commit()
+
+        # 실시간 브로드캐스트 (같은 글을 보고 있는 모든 사용자에게)
+        await broker.publish(
+            {
+                "type": "comment",
+                "entry_id": entry_id,
+                "comment_id": comment.id,
+                "author": author_name,
+                "author_image": user.profile_image,
+                "message": text,
+                "created_at": comment.created_at.strftime("%Y-%m-%d %H:%M"),
+                "target_user_id": entry.author_id if entry.author_id != user.id else None,
+            }
+        )
     return RedirectResponse(url=f"/#entry-{entry_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 

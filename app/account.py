@@ -9,7 +9,16 @@ from sqlalchemy.orm import Session
 
 from .auth import get_current_user, require_admin, require_user
 from .database import get_db
-from .models import User
+from .models import Notification, User
+
+
+def unread_count(db: Session, user: User | None) -> int:
+    """현재 사용자의 안 읽은 알림 개수 (미로그인 시 0)."""
+    if user is None:
+        return 0
+    return db.query(Notification).filter(
+        Notification.user_id == user.id, Notification.is_read.is_(False)
+    ).count()
 
 router = APIRouter(tags=["account"])
 
@@ -100,3 +109,37 @@ def delete_member(
     db.delete(member)  # entries는 User-GuestbookEntry cascade로 삭제
     db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ----- 알림 -----
+@router.get("/notifications", response_class=HTMLResponse)
+def notifications_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> HTMLResponse:
+    """내 알림 목록 (로그인 필요). 조회 시 모두 읽음 처리."""
+    items = list(
+        db.query(Notification)
+        .filter(Notification.user_id == user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    # 조회 시 읽음 처리
+    db.query(Notification).filter(
+        Notification.user_id == user.id, Notification.is_read.is_(False)
+    ).update({Notification.is_read: True})
+    db.commit()
+    return templates.TemplateResponse(
+        request, "notifications.html", {"user": user, "items": items}
+    )
+
+
+@router.get("/api/notifications/unread_count")
+def api_unread_count(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> dict:
+    """안 읽은 알림 개수 (실시간 뱃지 갱신용)."""
+    return {"count": unread_count(db, user)}
