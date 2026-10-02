@@ -16,6 +16,15 @@ env/
 # 업로드된 파일
 uploads/
 
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
 # IDE
 .vscode/
 .idea/

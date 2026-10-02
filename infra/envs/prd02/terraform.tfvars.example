@@ -1,0 +1,6 @@
+region             = "ap-northeast-2"
+image_tag          = "latest"
+admin_username     = "admin"
+# ALB DNS는 apply 후 output으로 확인 → 이 값을 갱신하고 다시 apply
+kakao_redirect_uri = "http://<ALB_DNS>/auth/kakao/callback"
+ssm_prefix         = "/guestbook/prd02"

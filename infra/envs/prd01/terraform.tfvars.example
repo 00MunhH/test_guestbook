@@ -1,0 +1,5 @@
+region            = "ap-northeast-2"
+instance_type     = "t3.small"
+# key_name        = "my-keypair"            # SSH 쓰려면 지정
+ssh_ingress_cidrs = ["<MY_IP>/32"]          # 본인 IP만 SSH 허용 권장
+app_ingress_cidrs = ["0.0.0.0/0"]           # 8000 포트 공개
