@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% set active_nav = 'me' %}
+{% block title %}내 정보{% endblock %}
+
+{% block head_extra %}
+<style>
+  .profile { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .profile img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .profile .nick { font-weight: 600; }
+  .profile .sub { color: #888; font-size: 13px; }
+  .badge { display: inline-block; background: #ffe3e3; color: #c92a2a; font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+  label { display: block; font-size: 13px; color: #555; margin: 14px 0 6px; }
+  input[type=text], textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 15px; }
+  textarea { min-height: 90px; resize: vertical; }
+  .actions { margin-top: 16px; display: flex; gap: 8px; }
+  .saved-msg { background: #ebfbee; color: #2b8a3e; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; }
+  .me-card { padding: 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">내 정보</h1>
+  <div class="card me-card">
+    {% if saved %}
+      <div class="saved-msg">✅ 저장되었습니다.</div>
+    {% endif %}
+    <div class="profile">
+      {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="프로필" />{% endif %}
+      <div>
+        <div class="nick">{{ user.shown_name }}
+          {% if user.is_admin %}<span class="badge">관리자</span>{% endif %}
+        </div>
+        <div class="sub">카카오 닉네임: {{ user.nickname }} · 가입일 {{ user.created_at.strftime("%Y-%m-%d") }}</div>
+      </div>
+    </div>
+
+    <form action="/me" method="post">
+      <label for="display_name">표시 이름 (비우면 카카오 닉네임 사용)</label>
+      <input type="text" id="display_name" name="display_name" value="{{ user.display_name }}" maxlength="128" placeholder="예: 홍길동" />
+
+      <label for="bio">자기소개</label>
+      <textarea id="bio" name="bio" placeholder="간단한 소개를 남겨보세요.">{{ user.bio }}</textarea>
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">저장</button>
+        <a class="btn btn-ghost" href="/">취소</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

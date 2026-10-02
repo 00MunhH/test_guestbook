@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% set active_nav = 'friends' %}
+{% block title %}사이 맺기 · 친구{% endblock %}
+
+{% block head_extra %}
+<style>
+  h2.sec { font-size: 15px; color: #666; margin: 22px 0 10px; }
+  .fcard { padding: 8px 14px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f3f3f3; flex-wrap: wrap; }
+  .row:last-child { border-bottom: none; }
+  .row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
+  .row .info { flex: 1; min-width: 120px; }
+  .row .name { font-weight: 600; font-size: 14px; }
+  .row .label { color: #868e96; font-size: 12px; }
+  .btn-accept { background: #e7f5ff; color: #1971c2; }
+  .btn-del { background: #fff5f5; color: #c92a2a; }
+  .btn-s { padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; }
+  .search { display: flex; gap: 8px; margin: 6px 0 2px; }
+  .search input { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+  .inline { display: inline; margin: 0; }
+  .label-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .relation-input { width: 100px; border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .empty { color: #aaa; font-size: 13px; padding: 10px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">🤝 사이 맺기</h1>
+
+  <h2 class="sec">사용자 찾기</h2>
+  <div class="card fcard">
+    <form class="search" action="/friends" method="get">
+      <input type="text" name="q" value="{{ q }}" placeholder="닉네임 또는 표시 이름 검색" />
+      <button class="btn btn-primary" type="submit">검색</button>
+    </form>
+    {% for u in search_results %}
+      <div class="row">
+        {% if u.profile_image %}<img src="{{ u.profile_image }}" alt="" />{% endif %}
+        <div class="info"><div class="name">{{ u.shown_name }}</div></div>
+        <form class="inline label-form" action="/friends/request" method="post">
+          <input type="hidden" name="addressee_id" value="{{ u.id }}" />
+          <input class="relation-input" type="text" name="relation_label" value="친구" title="관계 (예: 친구, 동료)" />
+          <button class="btn-s btn-accept" type="submit">요청</button>
+        </form>
+      </div>
+    {% endfor %}
+    {% if q and not search_results %}
+      <div class="empty">검색 결과가 없습니다. (이미 관계가 있거나 본인은 제외됩니다)</div>
+    {% endif %}
+  </div>
+
+  {% if incoming %}
+  <h2 class="sec">받은 요청 ({{ incoming | length }})</h2>
+  <div class="card fcard">
+    {% for f, other in incoming %}
+      <div class="row">
+        {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
+        <div class="info">
+          <div class="name">{{ other.shown_name }}</div>
+          <div class="label">관계: {{ f.relation_label }}</div>
+        </div>
+        <form class="inline" action="/friends/{{ f.id }}/accept" method="post">
+          <button class="btn-s btn-accept" type="submit">수락</button>
+        </form>
+        <form class="inline" action="/friends/{{ f.id }}/delete" method="post">
+          <button class="btn-s btn-del" type="submit">거절</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h2 class="sec">내 친구 ({{ friends | length }})</h2>
+  <div class="card fcard">
+    {% for f, other in friends %}
+      <div class="row">
+        {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
+        <div class="info">
+          <div class="name">{{ other.shown_name }}</div>
+          <form class="label-form" action="/friends/{{ f.id }}/label" method="post">
+            <input class="relation-input" type="text" name="relation_label" value="{{ f.relation_label }}" />
+            <button class="btn-s btn-accept" type="submit">관계 저장</button>
+          </form>
+        </div>
+        <form class="inline" action="/friends/{{ f.id }}/delete" method="post"
+              onsubmit="return confirm('{{ other.shown_name }}님과의 사이를 끊을까요?');">
+          <button class="btn-s btn-del" type="submit">끊기</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="empty">아직 친구가 없습니다. 위에서 사용자를 검색해 요청을 보내보세요.</div>
+    {% endfor %}
+  </div>
+
+  {% if outgoing %}
+  <h2 class="sec">보낸 요청 ({{ outgoing | length }})</h2>
+  <div class="card fcard">
+    {% for f, other in outgoing %}
+      <div class="row">
+        {% if other.profile_image %}<img src="{{ other.profile_image }}" alt="" />{% endif %}
+        <div class="info">
+          <div class="name">{{ other.shown_name }}</div>
+          <div class="label">대기 중 · 관계: {{ f.relation_label }}</div>
+        </div>
+        <form class="inline" action="/friends/{{ f.id }}/delete" method="post">
+          <button class="btn-s btn-del" type="submit">취소</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endblock %}

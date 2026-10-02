@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{% set active_nav = 'chat' %}
+{% block title %}채팅방{% endblock %}
+
+{% block head_extra %}
+<style>
+  .create { display: flex; gap: 8px; padding: 12px 14px; }
+  .create input { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 14px; }
+  .room { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid #f3f3f3; color: inherit; }
+  .room:last-child { border-bottom: none; }
+  .room .avatar { position: relative; width: 42px; height: 42px; border-radius: 12px; background: #e7f5ff; color: #1971c2; display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none; }
+  .room .avatar .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 11px; text-align: center; }
+  .room .name { font-weight: 600; }
+  .room .sub { color: #999; font-size: 12px; }
+  .room.has-unread .name { font-weight: 800; }
+  .empty { color: #aaa; text-align: center; padding: 30px 0; }
+  .sec { font-size: 15px; color: #666; margin: 22px 0 10px; }
+  .invite { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #f3f3f3; }
+  .invite:last-child { border-bottom: none; }
+  .invite .info { flex: 1; }
+  .invite .nm { font-weight: 600; }
+  .invite form { display: inline; margin: 0; }
+  .btn-s { padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; }
+  .btn-accept { background: #e7f5ff; color: #1971c2; }
+  .btn-decline { background: #fff5f5; color: #c92a2a; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">💬 채팅방</h1>
+
+  <div class="card" style="margin-bottom:16px">
+    <form class="create" action="/chat/rooms" method="post">
+      <input type="text" name="name" placeholder="새 채팅방 이름" required />
+      <button class="btn btn-primary" type="submit">개설</button>
+    </form>
+  </div>
+
+  {% if invites %}
+  <h2 class="sec">받은 초대 ({{ invites | length }})</h2>
+  <div class="card" style="margin-bottom:16px">
+    {% for iv in invites %}
+      <div class="invite">
+        <div class="avatar" style="width:36px;height:36px;background:#fff4e6;color:#e8590c;border-radius:10px;display:flex;align-items:center;justify-content:center;">✉️</div>
+        <div class="info"><div class="nm">{{ iv.room.name }}</div><div class="sub" style="color:#999;font-size:12px">채팅방 초대</div></div>
+        <form action="/chat/{{ iv.room.id }}/invite/accept" method="post">
+          <button class="btn-s btn-accept" type="submit">수락</button>
+        </form>
+        <form action="/chat/{{ iv.room.id }}/invite/decline" method="post">
+          <button class="btn-s btn-decline" type="submit">거절</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    {% for item in rooms %}
+      <a class="room {% if item.unread %}has-unread{% endif %}" href="/chat/{{ item.room.id }}">
+        <div class="avatar">💬{% if item.unread %}<span class="badge">{{ item.unread }}</span>{% endif %}</div>
+        <div>
+          <div class="name">{{ item.room.name }}</div>
+          <div class="sub">개설 {{ item.room.created_at | kst }}{% if item.unread %} · 안 읽은 메시지 {{ item.unread }}개{% endif %}</div>
+        </div>
+      </a>
+    {% else %}
+      <div class="empty">아직 채팅방이 없습니다. 위에서 새 방을 만들어보세요.</div>
+    {% endfor %}
+  </div>
+{% endblock %}
