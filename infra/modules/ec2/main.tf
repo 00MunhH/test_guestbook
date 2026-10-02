@@ -29,7 +29,7 @@ resource "aws_instance" "this" {
     http_tokens = "required" # IMDSv2 강제
   }
   root_block_device {
-    volume_size = 20
+    volume_size = var.root_volume_size
     volume_type = "gp3"
     encrypted   = true
   }

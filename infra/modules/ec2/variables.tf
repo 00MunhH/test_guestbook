@@ -28,6 +28,11 @@ variable "associate_eip" {
   type    = bool
   default = true
 }
+variable "root_volume_size" {
+  description = "루트 EBS 크기(GB). AMI 기본 스냅샷 크기 이상이어야 함(AL2023은 30GB)"
+  type        = number
+  default     = 30
+}
 variable "tags" {
   type    = map(string)
   default = {}
