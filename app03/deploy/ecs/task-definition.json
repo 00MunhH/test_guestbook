@@ -1,0 +1,40 @@
+{
+  "family": "guestbook-app03",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/guestbookApp03TaskRole",
+  "containerDefinitions": [
+    {
+      "name": "web",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/guestbook-app03:latest",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "KAKAO_REDIRECT_URI", "value": "https://<ALB_DOMAIN>/auth/kakao/callback" },
+        { "name": "REDIS_URL", "value": "redis://<ELASTICACHE_ENDPOINT>:6379/0" },
+        { "name": "S3_BUCKET", "value": "<S3_BUCKET>" },
+        { "name": "AWS_REGION", "value": "<REGION>" },
+        { "name": "ADMIN_KAKAO_IDS", "value": "" },
+        { "name": "ADMIN_USERNAME", "value": "admin" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/guestbook/DATABASE_URL" },
+        { "name": "KAKAO_REST_API_KEY", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/guestbook/KAKAO_REST_API_KEY" },
+        { "name": "KAKAO_CLIENT_SECRET", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/guestbook/KAKAO_CLIENT_SECRET" },
+        { "name": "SESSION_SECRET_KEY", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/guestbook/SESSION_SECRET_KEY" },
+        { "name": "ADMIN_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/guestbook/ADMIN_PASSWORD" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/guestbook-app03",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "web"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+"""FastAPI 진입점: 미들웨어, 라우터, 홈 페이지 구성."""
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
+
+from . import account, auth, chat, events, friends, guestbook
+from .account import unread_count
+from .timeutils import to_kst
+from .auth import get_current_user
+from .config import settings
+from .database import get_db, init_db
+from .models import GuestbookEntry, User
+
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Jinja2 전역 필터 등록 (KST 시간 표시)
+templates.env.filters["kst"] = to_kst
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 앱 시작 시 테이블 생성/자동 마이그레이션 + 기본 관리자 보장
+    init_db()
+    auth.ensure_local_admin()
+    yield
+
+
+app = FastAPI(title="카카오 로그인 방명록", lifespan=lifespan)
+
+# 세션 미들웨어 (request.session 사용)
+app.add_middleware(SessionMiddleware, secret_key=settings.session_secret_key)
+
+# 라우터 등록
+app.include_router(auth.router)
+app.include_router(guestbook.router)
+app.include_router(account.router)
+app.include_router(events.router)
+app.include_router(friends.router)
+app.include_router(chat.router)
+
+
+PER_PAGE = 5  # 페이지당 게시글 수
+
+
+@app.get("/", response_class=HTMLResponse)
+def home(
+    request: Request,
+    page: int = 1,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user),
+) -> HTMLResponse:
+    """홈: 방명록 목록(페이지네이션) + 작성 폼(로그인 시)."""
+    from sqlalchemy import func
+
+    total = db.scalar(select(func.count()).select_from(GuestbookEntry)) or 0
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(1, min(page, total_pages))
+
+    stmt = (
+        select(GuestbookEntry)
+        .order_by(GuestbookEntry.created_at.desc())
+        .offset((page - 1) * PER_PAGE)
+        .limit(PER_PAGE)
+    )
+    entries = list(db.scalars(stmt).all())
+
+    # 친구 추가 진입점용: 내 친구 id 집합 + 이미 요청/관계 있는 상대 집합
+    friend_ids: set[int] = set()
+    related_ids: set[int] = set()
+    if user is not None:
+        from .friends import accepted_friend_ids
+        from .models import Friendship
+        from sqlalchemy import or_ as _or
+
+        friend_ids = accepted_friend_ids(db, user.id)
+        links = db.scalars(
+            select(Friendship).where(
+                _or(Friendship.requester_id == user.id, Friendship.addressee_id == user.id)
+            )
+        ).all()
+        for f in links:
+            related_ids.add(f.addressee_id if f.requester_id == user.id else f.requester_id)
+
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "entries": entries,
+            "user": user,
+            "unread": unread_count(db, user),
+            "current_user_id": user.id if user else None,
+            "page": page,
+            "total_pages": total_pages,
+            "total_entries": total,
+            "friend_ids": friend_ids,
+            "related_ids": related_ids,
+        },
+    )

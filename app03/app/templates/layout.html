@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}방명록{% endblock %}</title>
+  <style>
+    :root {
+      --kakao: #fee500; --kakao-text: #191600;
+      --sidebar-w: 240px; --topbar-h: 56px;
+      --accent: #191600; --muted: #868e96; --line: #eee; --bg: #f4f5f7;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #222; background: var(--bg); }
+    a { text-decoration: none; color: inherit; }
+
+    /* 상단바 */
+    .topbar {
+      position: sticky; top: 0; z-index: 30; height: var(--topbar-h);
+      display: flex; align-items: center; gap: 12px; padding: 0 16px;
+      background: #fff; border-bottom: 1px solid var(--line);
+    }
+    .hamburger { background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; line-height: 1; border-radius: 8px; }
+    .hamburger:hover { background: #f1f3f5; }
+    .topbar .brand { font-size: 18px; font-weight: 800; white-space: nowrap; }
+    .topbar .spacer { flex: 1; }
+    .topbar .notif-link { position: relative; font-size: 20px; padding: 4px 8px; }
+    .notif-badge { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 10px; text-align: center; }
+
+    /* 사이드바 */
+    .sidebar {
+      position: fixed; top: 0; left: 0; z-index: 50; width: var(--sidebar-w); height: 100vh;
+      background: #fff; border-right: 1px solid var(--line); padding: 16px 12px;
+      transform: translateX(-100%); transition: transform .25s ease; overflow-y: auto;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar .side-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+    .sidebar .side-head img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #ddd; }
+    .sidebar .side-head .nm { font-weight: 700; font-size: 14px; }
+    .sidebar .side-head .sub { color: var(--muted); font-size: 12px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; font-size: 15px; color: #333; }
+    .nav-item:hover { background: #f1f3f5; }
+    .nav-item.active { background: #fff6c2; color: var(--kakao-text); font-weight: 700; }
+    .nav-item .ico { width: 20px; text-align: center; }
+    .nav-item .pill { margin-left: auto; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 11px; text-align: center; }
+    .nav-sep { height: 1px; background: var(--line); margin: 10px 4px; }
+
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+    .overlay.show { opacity: 1; pointer-events: auto; }
+
+    /* 콘텐츠 */
+    .content { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+
+    /* 데스크톱: 사이드바 고정 */
+    @media (min-width: 1024px) {
+      .sidebar { transform: translateX(0); }
+      .hamburger { display: none; }
+      .overlay { display: none; }
+      .app { margin-left: var(--sidebar-w); }
+    }
+
+    /* 공통 UI 유틸 */
+    .btn { display: inline-block; padding: 9px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: #eee; color: #333; }
+    .btn-kakao { background: var(--kakao); color: var(--kakao-text); font-weight: 600; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    h1.page-title { font-size: 22px; margin: 0 0 18px; }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  {% set nav = active_nav | default('') %}
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      {% if user %}
+        {% if user.profile_image %}<img src="{{ user.profile_image }}" alt="" />{% endif %}
+        <div>
+          <div class="nm">{{ user.shown_name }}</div>
+          <div class="sub">{% if user.is_admin %}관리자{% else %}회원{% endif %}</div>
+        </div>
+      {% else %}
+        <div><div class="nm">방명록</div><div class="sub">로그인 안 됨</div></div>
+      {% endif %}
+    </div>
+
+    <a class="nav-item {% if nav=='home' %}active{% endif %}" href="/"><span class="ico">📖</span> 방명록</a>
+    {% if user %}
+      <a class="nav-item {% if nav=='friends' %}active{% endif %}" href="/friends"><span class="ico">🤝</span> 친구</a>
+      <a class="nav-item {% if nav=='chat' %}active{% endif %}" href="/chat"><span class="ico">💬</span> 채팅</a>
+      <a class="nav-item {% if nav=='notifications' %}active{% endif %}" href="/notifications">
+        <span class="ico">🔔</span> 알림
+        {% if unread %}<span class="pill" id="side-notif-badge">{{ unread }}</span>{% endif %}
+      </a>
+      <a class="nav-item {% if nav=='me' %}active{% endif %}" href="/me"><span class="ico">👤</span> 내 정보</a>
+      {% if user.is_admin %}
+        <a class="nav-item {% if nav=='admin' %}active{% endif %}" href="/admin"><span class="ico">🛠️</span> 관리자</a>
+      {% endif %}
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="/auth/logout"><span class="ico">↩️</span> 로그아웃</a>
+    {% else %}
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="/auth/kakao/login"><span class="ico">🟡</span> 카카오 로그인</a>
+      <a class="nav-item" href="/auth/admin/login"><span class="ico">🔐</span> 관리자 로그인</a>
+    {% endif %}
+  </aside>
+  <div class="overlay" id="overlay"></div>
+
+  <div class="app">
+    <div class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="메뉴 열기">☰</button>
+      <a class="brand" href="/">📖 방명록</a>
+      <span class="spacer"></span>
+      {% if user %}
+        <a class="notif-link" href="/notifications" aria-label="알림">🔔{% if unread %}<span class="notif-badge" id="top-notif-badge">{{ unread }}</span>{% endif %}</a>
+      {% endif %}
+    </div>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var sb = document.getElementById("sidebar");
+      var ov = document.getElementById("overlay");
+      var hb = document.getElementById("hamburger");
+      function open() { sb.classList.add("open"); ov.classList.add("show"); }
+      function close() { sb.classList.remove("open"); ov.classList.remove("show"); }
+      if (hb) hb.addEventListener("click", open);
+      if (ov) ov.addEventListener("click", close);
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

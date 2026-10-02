@@ -1,0 +1,494 @@
+{% extends "layout.html" %}
+{% set active_nav = 'home' %}
+{% block title %}방명록{% endblock %}
+
+{% block head_extra %}
+<style>
+  .write { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 20px; }
+  .write textarea { width: 100%; min-height: 80px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 15px; resize: vertical; }
+  .write .actions { text-align: right; margin-top: 10px; }
+  .login-note { background: #fff; padding: 16px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  ul.entries { list-style: none; padding: 0; margin: 0; }
+  li.entry { background: #fff; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  li.entry .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  li.entry .meta img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  li.entry .meta .name { font-weight: 600; font-size: 14px; }
+  li.entry .meta .time { color: #999; font-size: 12px; margin-left: auto; }
+  .inline { display: inline; margin: 0; }
+  .rel-chip { font-size: 11px; background: #e7f5ff; color: #1971c2; border-radius: 999px; padding: 2px 8px; }
+  .add-friend-btn { font-size: 11px; background: #fff; border: 1px solid #4dabf7; color: #1971c2; border-radius: 999px; padding: 2px 8px; cursor: pointer; }
+  .add-friend-btn:hover { background: #e7f5ff; }
+  li.entry .meta form { margin: 0; }
+  .lnk { background: none; border: none; font-size: 12px; cursor: pointer; padding: 0; }
+  .lnk.del { color: #c33; } .lnk.edit { color: #3b5bdb; }
+  .lnk:hover { text-decoration: underline; }
+  li.entry .msg { white-space: pre-wrap; line-height: 1.5; word-break: break-word; }
+  .empty { color: #999; text-align: center; padding: 32px 0; }
+
+  .edit-form { margin-top: 8px; }
+  .edit-form textarea, .edit-form input[type=text] { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .edit-form .actions { margin-top: 6px; display: flex; gap: 6px; }
+
+  .comment.new-comment { animation: flash 1.2s ease; }
+  @keyframes flash { from { background: #fff3bf; } to { background: transparent; } }
+  .comment.focus-flash { animation: focusflash 1.6s ease; border-radius: 8px; }
+  @keyframes focusflash { 0%,100% { background: transparent; } 15%,55% { background: #ffe066; } 35% { background: transparent; } }
+  .reply-list { margin-top: 8px; padding-left: 14px; border-left: 2px solid #f0f0f0; }
+  .comment.reply { margin-bottom: 6px; }
+  .reply-toggle, .replies-toggle { background: none; border: none; color: #868e96; font-size: 12px; cursor: pointer; padding: 2px 0; margin-top: 4px; }
+  .reply-toggle:hover, .replies-toggle:hover { text-decoration: underline; }
+  .reply-form { margin-top: 8px; }
+
+  .reactions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .reactions form { margin: 0; }
+  .react-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid #e2e2e2; background: #fff; border-radius: 999px; font-size: 13px; cursor: pointer; color: #444; line-height: 1; }
+  .react-btn:hover { background: #f4f4f4; }
+  .react-btn.active { background: #fff6c2; border-color: var(--kakao); color: #191600; font-weight: 600; }
+  .react-btn .count { color: #888; font-weight: 500; }
+  .react-btn.active .count { color: #191600; }
+  .react-btn.disabled { cursor: default; opacity: .85; }
+  .creactions .reactions { margin-top: 6px; gap: 6px; }
+  .creactions .react-btn { padding: 3px 8px; font-size: 12px; }
+
+  .comments { margin-top: 14px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+  .comments h4 { font-size: 13px; color: #888; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .comments-toggle { background: #f1f3f5; border: none; border-radius: 6px; font-size: 12px; color: #555; cursor: pointer; padding: 3px 8px; }
+  .comment { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  .comment img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #ddd; flex: none; }
+  .comment .body { flex: 1; min-width: 0; }
+  .comment .cname { font-weight: 600; font-size: 13px; }
+  .comment .ctime { color: #aaa; font-size: 11px; margin-left: 6px; }
+  .comment .cmsg { font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  .comment-actions { display: flex; gap: 8px; margin-top: 2px; }
+  .comment-form { display: flex; gap: 8px; margin-top: 10px; }
+  .comment-form input[type=text] { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .btn-ghost-sm { padding: 6px 10px; font-size: 13px; background: #eee; color: #333; border: none; border-radius: 8px; cursor: pointer; }
+  .muted { color: #aaa; font-size: 13px; }
+
+  /* 페이지네이션 */
+  .pagination { display: flex; justify-content: center; gap: 6px; margin: 20px 0 60px; flex-wrap: wrap; }
+  .pagination a, .pagination span { padding: 7px 12px; border-radius: 8px; font-size: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); color: #333; }
+  .pagination .cur { background: var(--accent); color: #fff; font-weight: 700; }
+  .pagination .disabled { color: #ccc; }
+
+  /* 플로팅 글쓰기/맨위 버튼 */
+  .fab { position: fixed; right: 20px; bottom: 20px; z-index: 35; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,.25); display: none; }
+  .fab.show { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+  {% if user %}
+    <form class="write" id="write-form" action="/entries" method="post">
+      <textarea name="message" placeholder="방명록을 남겨보세요..." required></textarea>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">등록</button>
+      </div>
+    </form>
+  {% else %}
+    <div class="login-note">
+      방명록을 남기려면 <a href="/auth/kakao/login">카카오 로그인</a>이 필요합니다. (조회는 누구나 가능합니다)
+    </div>
+  {% endif %}
+
+  {% set reaction_labels = [("like", "👍", "좋아요"), ("dislike", "👎", "싫어요"), ("thanks", "🙏", "감사해요")] %}
+
+  {% macro reaction_bar(obj, target_type, obj_id) %}
+    {% set counts = obj.reaction_counts() %}
+    {% set my_reaction = obj.user_reaction(user.id) if user else None %}
+    {% set names = obj.reactor_names() %}
+    <div class="reactions" data-react-url="/{{ target_type }}/{{ obj_id }}/react">
+      {% for rtype, emoji, label in reaction_labels %}
+        {% set who = names[rtype] | join(', ') %}
+        {% set tip = label + (' · ' + who if who else '') %}
+        {% if user %}
+          <form action="/{{ target_type }}/{{ obj_id }}/react" method="post" class="react-form">
+            <input type="hidden" name="reaction_type" value="{{ rtype }}" />
+            <button class="react-btn {% if my_reaction == rtype %}active{% endif %}" type="submit"
+                    title="{{ tip }}" data-rtype="{{ rtype }}" data-label="{{ label }}">
+              <span>{{ emoji }}</span><span>{{ label }}</span>
+              <span class="count">{{ counts[rtype] }}</span>
+            </button>
+          </form>
+        {% else %}
+          <span class="react-btn disabled" title="{{ tip }}" data-rtype="{{ rtype }}" data-label="{{ label }}">
+            <span>{{ emoji }}</span><span>{{ label }}</span>
+            <span class="count">{{ counts[rtype] }}</span>
+          </span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endmacro %}
+
+  {# 댓글/대댓글 공용 렌더 매크로 #}
+  {% macro comment_block(c, is_reply) %}
+    <div class="comment {% if is_reply %}reply{% endif %}" id="comment-{{ c.id }}" data-comment="{{ c.id }}">
+      {% if c.author.profile_image %}<img src="{{ c.author.profile_image }}" alt="프로필" />{% endif %}
+      <div class="body">
+        <span class="cname">{{ c.author.shown_name }}</span>
+        <span class="ctime">{{ c.created_at | kst }}</span>
+        <div class="cmsg">{{ c.message }}</div>
+        {% if user and c.author_id == user.id %}
+          <form class="edit-form comment-edit" style="display:none" action="/comments/{{ c.id }}/edit" method="post">
+            <input type="text" name="message" value="{{ c.message }}" required />
+            <div class="actions">
+              <button class="btn btn-primary btn-sm" type="submit">저장</button>
+              <button type="button" class="btn-ghost-sm edit-cancel">취소</button>
+            </div>
+          </form>
+        {% endif %}
+        <div class="creactions">{{ reaction_bar(c, 'comments', c.id) }}</div>
+        {% if user and c.author_id == user.id %}
+          <div class="comment-actions">
+            <button type="button" class="lnk edit edit-toggle">수정</button>
+            <form action="/comments/{{ c.id }}/delete" method="post" onsubmit="return confirm('댓글을 삭제할까요?');">
+              <button class="lnk del" type="submit">삭제</button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endmacro %}
+
+  <ul class="entries">
+    {% for entry in entries %}
+      <li class="entry" id="entry-{{ entry.id }}">
+        <div class="meta">
+          {% if entry.author.profile_image %}<img src="{{ entry.author.profile_image }}" alt="프로필" />{% endif %}
+          <span class="name">{{ entry.author.shown_name }}</span>
+          {% if user and entry.author_id != user.id %}
+            {% if entry.author_id in friend_ids %}
+              <span class="rel-chip">친구</span>
+            {% elif entry.author_id not in related_ids %}
+              <form class="inline add-friend-form" action="/friends/request" method="post"
+                    onsubmit="return confirm('{{ entry.author.shown_name }}님에게 친구 요청을 보낼까요?');">
+                <input type="hidden" name="addressee_id" value="{{ entry.author_id }}" />
+                <input type="hidden" name="relation_label" value="친구" />
+                <button type="submit" class="add-friend-btn">+ 친구 추가</button>
+              </form>
+            {% endif %}
+          {% endif %}
+          <span class="time">{{ entry.created_at | kst }}</span>
+          {% if user and entry.author_id == user.id %}
+            <button type="button" class="lnk edit entry-edit-toggle">수정</button>
+            <form action="/entries/{{ entry.id }}/delete" method="post" onsubmit="return confirm('이 글을 삭제할까요? 댓글과 반응도 함께 삭제됩니다.');">
+              <button class="lnk del" type="submit">삭제</button>
+            </form>
+          {% endif %}
+        </div>
+        <div class="msg">{{ entry.message }}</div>
+        {% if user and entry.author_id == user.id %}
+          <form class="edit-form entry-edit" style="display:none" action="/entries/{{ entry.id }}/edit" method="post">
+            <textarea name="message" required>{{ entry.message }}</textarea>
+            <div class="actions">
+              <button class="btn btn-primary btn-sm" type="submit">저장</button>
+              <button type="button" class="btn-ghost-sm edit-cancel">취소</button>
+            </div>
+          </form>
+        {% endif %}
+
+        {{ reaction_bar(entry, 'entries', entry.id) }}
+
+        <!-- 댓글 -->
+        <div class="comments">
+          <h4>
+            댓글 <span class="comment-count" data-entry="{{ entry.id }}">{{ entry.comment_total }}</span>
+            {% if entry.top_comments %}
+              <button type="button" class="comments-toggle" data-entry="{{ entry.id }}">접기</button>
+            {% endif %}
+          </h4>
+          <div class="comment-list" data-entry="{{ entry.id }}">
+          {% for c in entry.top_comments %}
+            <div class="comment-thread">
+              {{ comment_block(c, false) }}
+              <div class="reply-wrap" style="padding-left: 32px;">
+                {% if c.replies %}
+                  <button type="button" class="replies-toggle" data-parent="{{ c.id }}">
+                    답글 {{ c.replies | length }}개 보기
+                  </button>
+                {% endif %}
+                <div class="reply-list" data-parent="{{ c.id }}" style="display:none">
+                  {% for r in c.replies %}
+                    {{ comment_block(r, true) }}
+                  {% endfor %}
+                </div>
+                {% if user %}
+                  <button type="button" class="reply-toggle" data-target="reply-form-{{ c.id }}">답글 달기</button>
+                  <form class="reply-form comment-form comment-create" id="reply-form-{{ c.id }}" style="display:none"
+                        action="/entries/{{ entry.id }}/comments" method="post" data-parent="{{ c.id }}">
+                    <input type="hidden" name="parent_id" value="{{ c.id }}" />
+                    <input type="text" name="message" placeholder="답글을 입력하세요..." required />
+                    <button class="btn btn-primary btn-sm" type="submit">답글</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+          </div>
+
+          {% if user %}
+            <form class="comment-form comment-create" action="/entries/{{ entry.id }}/comments" method="post">
+              <input type="text" name="message" placeholder="댓글을 입력하세요..." required />
+              <button class="btn btn-primary btn-sm" type="submit">댓글</button>
+            </form>
+          {% else %}
+            <p class="muted">댓글을 남기려면 로그인하세요.</p>
+          {% endif %}
+        </div>
+      </li>
+    {% else %}
+      <li class="empty">아직 등록된 방명록이 없습니다.</li>
+    {% endfor %}
+  </ul>
+
+  {% if total_pages > 1 %}
+  <nav class="pagination">
+    {% if page > 1 %}<a href="/?page={{ page - 1 }}">← 이전</a>{% else %}<span class="disabled">← 이전</span>{% endif %}
+    {% for p in range(1, total_pages + 1) %}
+      {% if p == page %}<span class="cur">{{ p }}</span>{% else %}<a href="/?page={{ p }}">{{ p }}</a>{% endif %}
+    {% endfor %}
+    {% if page < total_pages %}<a href="/?page={{ page + 1 }}">다음 →</a>{% else %}<span class="disabled">다음 →</span>{% endif %}
+  </nav>
+  {% endif %}
+
+  {% if user %}<button class="fab" id="fab" title="글쓰기">✎</button>{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var CURRENT_USER_ID = {{ current_user_id if current_user_id is not none else 'null' }};
+    var seen = {};
+
+    function escapeHtml(s) {
+      var d = document.createElement("div");
+      d.textContent = s == null ? "" : String(s);
+      return d.innerHTML;
+    }
+
+    // ----- 댓글/대댓글 실시간 또는 내 작성 삽입 -----
+    function buildComment(ev) {
+      var mine = ev.author_id === CURRENT_USER_ID;
+      var wrap = document.createElement("div");
+      wrap.className = "comment new-comment" + (ev.parent_id ? " reply" : "");
+      wrap.id = "comment-" + ev.comment_id;
+      wrap.setAttribute("data-comment", ev.comment_id);
+      var img = ev.author_image ? '<img src="' + escapeHtml(ev.author_image) + '" alt="프로필" />' : "";
+      wrap.innerHTML =
+        img +
+        '<div class="body">' +
+          '<span class="cname">' + escapeHtml(ev.author) + '</span>' +
+          '<span class="ctime">' + escapeHtml(ev.created_at) + '</span>' +
+          '<div class="cmsg">' + escapeHtml(ev.message) + '</div>' +
+        '</div>';
+      return wrap;
+    }
+
+    function insertComment(ev) {
+      if (ev.comment_id) {
+        if (seen[ev.comment_id]) return;
+        if (document.querySelector('[data-comment="' + ev.comment_id + '"]')) { seen[ev.comment_id] = true; return; }
+        seen[ev.comment_id] = true;
+      }
+      if (ev.parent_id) {
+        var rl = document.querySelector('.reply-list[data-parent="' + ev.parent_id + '"]');
+        if (!rl) return;
+        rl.style.display = "block";
+        rl.appendChild(buildComment(ev));
+      } else {
+        var cl = document.querySelector('.comment-list[data-entry="' + ev.entry_id + '"]');
+        if (!cl) return;
+        var thread = document.createElement("div");
+        thread.className = "comment-thread";
+        thread.appendChild(buildComment(ev));
+        cl.appendChild(thread);
+      }
+      var cnt = document.querySelector('.comment-count[data-entry="' + ev.entry_id + '"]');
+      if (cnt) cnt.textContent = (parseInt(cnt.textContent, 10) || 0) + 1;
+    }
+
+    // ----- 클릭 핸들러 (토글/수정) -----
+    document.addEventListener("click", function (e) {
+      // 답글 입력 토글
+      var rt = e.target.closest(".reply-toggle");
+      if (rt) {
+        var f = document.getElementById(rt.getAttribute("data-target"));
+        if (f) f.style.display = f.style.display === "none" ? "flex" : "none";
+        return;
+      }
+      // 대댓글 목록 토글
+      var rst = e.target.closest(".replies-toggle");
+      if (rst) {
+        var rl = document.querySelector('.reply-list[data-parent="' + rst.getAttribute("data-parent") + '"]');
+        if (rl) {
+          var show = rl.style.display === "none";
+          rl.style.display = show ? "block" : "none";
+          rst.textContent = show ? "답글 숨기기" : "답글 " + rl.children.length + "개 보기";
+        }
+        return;
+      }
+      // 댓글 전체 접기/펴기
+      var ct = e.target.closest(".comments-toggle");
+      if (ct) {
+        var list = document.querySelector('.comment-list[data-entry="' + ct.getAttribute("data-entry") + '"]');
+        if (list) {
+          var show = list.style.display === "none";
+          list.style.display = show ? "block" : "none";
+          ct.textContent = show ? "접기" : "펴기";
+        }
+        return;
+      }
+      // 게시글 수정 토글
+      var eet = e.target.closest(".entry-edit-toggle");
+      if (eet) {
+        var li = eet.closest(".entry");
+        var ef = li.querySelector(".entry-edit");
+        var msg = li.querySelector(".msg");
+        if (ef) { ef.style.display = ef.style.display === "none" ? "block" : "none"; }
+        if (msg) msg.style.display = (ef && ef.style.display === "block") ? "none" : "";
+        return;
+      }
+      // 댓글 수정 토글
+      var cet = e.target.closest(".edit-toggle");
+      if (cet) {
+        var body = cet.closest(".body");
+        var cf = body.querySelector(".comment-edit");
+        var cm = body.querySelector(".cmsg");
+        if (cf) cf.style.display = cf.style.display === "none" ? "block" : "none";
+        if (cm) cm.style.display = (cf && cf.style.display === "block") ? "none" : "";
+        return;
+      }
+      // 수정 취소
+      var cancel = e.target.closest(".edit-cancel");
+      if (cancel) {
+        var form = cancel.closest(".edit-form");
+        form.style.display = "none";
+        var sib = form.previousElementSibling;
+        // msg 또는 cmsg 복원
+        var host = form.closest(".entry") || form.closest(".body");
+        var target = host.querySelector(".msg") || host.querySelector(".cmsg");
+        if (target) target.style.display = "";
+        return;
+      }
+    });
+
+    // ----- 리액션 AJAX (스크롤 유지) -----
+    function renderReactions(container, state) {
+      container.querySelectorAll(".react-btn").forEach(function (btn) {
+        var rt = btn.getAttribute("data-rtype");
+        var label = btn.getAttribute("data-label");
+        var countEl = btn.querySelector(".count");
+        if (countEl) countEl.textContent = (state.counts && state.counts[rt]) || 0;
+        if (state.my_reaction === rt) btn.classList.add("active"); else btn.classList.remove("active");
+        var who = (state.reactors && state.reactors[rt]) ? state.reactors[rt].join(", ") : "";
+        btn.setAttribute("title", label + (who ? " · " + who : ""));
+      });
+    }
+
+    // ----- 폼 submit 가로채기: 리액션 / 댓글작성 / 수정 모두 AJAX (위치 유지) -----
+    document.addEventListener("submit", function (e) {
+      var form = e.target;
+
+      // 리액션
+      if (form.classList.contains("react-form")) {
+        e.preventDefault();
+        var container = form.closest(".reactions");
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (s) { if (container) renderReactions(container, s); })
+          .catch(function () {});
+        return;
+      }
+
+      // 댓글/답글 작성
+      if (form.classList.contains("comment-create")) {
+        e.preventDefault();
+        var input = form.querySelector('input[name="message"]');
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (ev) {
+            ev.type = "comment";
+            insertComment(ev);
+            if (input) input.value = "";
+            if (form.classList.contains("reply-form")) form.style.display = "none";
+          })
+          .catch(function () {});
+        return;
+      }
+
+      // 게시글/댓글 수정
+      if (form.classList.contains("edit-form")) {
+        e.preventDefault();
+        fetch(form.getAttribute("action"), { method: "POST", headers: { "X-Requested-With": "fetch" }, body: new FormData(form), credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (data) {
+            var host = form.closest(".entry") || form.closest(".body");
+            var target = host.querySelector(".msg") || host.querySelector(".cmsg");
+            if (target) { target.textContent = data.message; target.style.display = ""; }
+            form.style.display = "none";
+          })
+          .catch(function () {});
+        return;
+      }
+    });
+
+    // ----- 알림/작성 복귀 시 포커스 -----
+    function flash(el) {
+      el.classList.remove("focus-flash"); void el.offsetWidth; el.classList.add("focus-flash");
+      setTimeout(function () { el.classList.remove("focus-flash"); }, 1800);
+    }
+    (function highlightTarget() {
+      var params = new URLSearchParams(window.location.search);
+      var focusId = params.get("focus");
+      if (focusId || window.location.hash.indexOf("#comment-") === 0) {
+        var cid = focusId || window.location.hash.slice("#comment-".length);
+        var cel = document.getElementById("comment-" + cid);
+        if (cel) {
+          var rl = cel.closest(".reply-list");
+          if (rl) rl.style.display = "block";  // 대댓글이면 펼침
+          cel.scrollIntoView({ behavior: "auto", block: "center" });
+          flash(cel);
+        }
+        return;
+      }
+      if (window.location.hash.indexOf("#entry-") === 0) {
+        var eel = document.getElementById(window.location.hash.slice(1));
+        if (eel) eel.scrollIntoView({ behavior: "auto", block: "center" });
+      }
+    })();
+
+    // ----- 플로팅 글쓰기 버튼 -----
+    var fab = document.getElementById("fab");
+    var writeForm = document.getElementById("write-form");
+    if (fab && writeForm) {
+      window.addEventListener("scroll", function () {
+        fab.classList.toggle("show", window.scrollY > 300);
+      });
+      fab.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        var ta = writeForm.querySelector("textarea");
+        if (ta) setTimeout(function () { ta.focus(); }, 400);
+      });
+    }
+
+    // ----- 실시간 댓글 수신 -----
+    function bumpBadge(ev) {
+      if (CURRENT_USER_ID == null || ev.target_user_id == null || ev.target_user_id !== CURRENT_USER_ID) return;
+      ["top-notif-badge", "side-notif-badge"].forEach(function (bid) {
+        var badge = document.getElementById(bid);
+        if (badge) { badge.style.display = "inline-block"; badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1; }
+      });
+    }
+    if (typeof EventSource !== "undefined") {
+      var es = new EventSource("/events/comments");
+      es.onmessage = function (e) {
+        try {
+          var ev = JSON.parse(e.data);
+          if (ev.type === "comment") { insertComment(ev); bumpBadge(ev); }
+        } catch (_) {}
+      };
+    }
+  })();
+</script>
+{% endblock %}

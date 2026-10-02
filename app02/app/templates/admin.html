@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% set active_nav = 'admin' %}
+{% block title %}관리자 · 회원 관리{% endblock %}
+
+{% block head_extra %}
+<style>
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th, td { padding: 12px 14px; text-align: left; font-size: 14px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  th { background: #fafafa; color: #666; font-weight: 600; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .u { display: flex; align-items: center; gap: 8px; }
+  .u img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .badge.admin { background: #ffe3e3; color: #c92a2a; }
+  .badge.member { background: #e7f5ff; color: #1971c2; }
+  .me-tag { color: #aaa; font-size: 11px; }
+  form.inline { display: inline; margin: 0; }
+  .btn-s { padding: 6px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
+  .btn-grant { background: #e7f5ff; color: #1971c2; }
+  .btn-revoke { background: #fff4e6; color: #e8590c; }
+  .btn-del { background: #fff5f5; color: #c92a2a; }
+  .muted { color: #aaa; }
+  .count { color: #888; font-size: 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">회원 관리 <span class="count">({{ members | length }}명)</span></h1>
+  <div class="card table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>회원</th><th>카카오 ID</th><th>가입일</th><th>권한</th><th>관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+          <tr>
+            <td>
+              <div class="u">
+                {% if m.profile_image %}<img src="{{ m.profile_image }}" alt="프로필" />{% endif %}
+                <div>{{ m.shown_name }}{% if m.id == user.id %}<span class="me-tag">(나)</span>{% endif %}</div>
+              </div>
+            </td>
+            <td class="muted">{{ m.kakao_id }}</td>
+            <td class="muted">{{ m.created_at.strftime("%Y-%m-%d") }}</td>
+            <td>
+              {% if m.is_admin %}<span class="badge admin">관리자</span>{% else %}<span class="badge member">일반</span>{% endif %}
+            </td>
+            <td>
+              {% if m.is_admin %}
+                {% if m.id != user.id %}
+                  <form class="inline" action="/admin/members/{{ m.id }}/role" method="post">
+                    <input type="hidden" name="make_admin" value="0" />
+                    <button class="btn-s btn-revoke" type="submit">관리자 해제</button>
+                  </form>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              {% else %}
+                <form class="inline" action="/admin/members/{{ m.id }}/role" method="post">
+                  <input type="hidden" name="make_admin" value="1" />
+                  <button class="btn-s btn-grant" type="submit">관리자 지정</button>
+                </form>
+              {% endif %}
+              {% if m.id != user.id %}
+                <form class="inline" action="/admin/members/{{ m.id }}/delete" method="post"
+                      onsubmit="return confirm('{{ m.shown_name }} 회원을 삭제할까요? 작성한 글/댓글/반응도 함께 삭제됩니다.');">
+                  <button class="btn-s btn-del" type="submit">삭제</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,20 @@
+# app02 로컬 실행용 (ECS에서는 EFS 볼륨을 /mnt/data에 마운트)
+services:
+  web:
+    build: .
+    image: guestbook-app02:latest
+    container_name: guestbook-app02
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////mnt/data/guestbook.db
+      UPLOAD_DIR: /mnt/data/uploads
+    volumes:
+      # 로컬에서는 named volume이 EFS 역할을 대신한다
+      - app02_data:/mnt/data
+    restart: unless-stopped
+
+volumes:
+  app02_data:
