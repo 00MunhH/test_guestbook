@@ -42,6 +42,10 @@ locals {
     curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
       -o /usr/libexec/docker/cli-plugins/docker-compose
     chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+    # buildx 플러그인 (compose build에 필요: 0.17+)
+    curl -SL https://github.com/docker/buildx/releases/latest/download/buildx-v0.19.3.linux-amd64 \
+      -o /usr/libexec/docker/cli-plugins/docker-buildx
+    chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
     mkdir -p /mnt/efs
     mount -t efs -o tls ${module.efs.file_system_id}:/ /mnt/efs
     mkdir -p /mnt/efs/guestbook/uploads
