@@ -35,7 +35,7 @@ locals {
     #!/bin/bash
     set -e
     dnf update -y
-    dnf install -y docker git amazon-efs-utils
+    dnf install -y docker git amazon-efs-utils python3-botocore
     systemctl enable --now docker
     usermod -aG docker ec2-user
     mkdir -p /usr/libexec/docker/cli-plugins
@@ -47,9 +47,14 @@ locals {
       -o /usr/libexec/docker/cli-plugins/docker-buildx
     chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
     mkdir -p /mnt/efs
-    mount -t efs -o tls ${module.efs.file_system_id}:/ /mnt/efs
-    mkdir -p /mnt/efs/guestbook/uploads
+    # fstab 먼저 등록
     echo '${module.efs.file_system_id}:/ /mnt/efs efs _netdev,tls 0 0' >> /etc/fstab
+    # 마운트 타깃이 available 될 때까지 재시도 (최대 ~5분). set -e로 중단되지 않게 || true
+    for i in $(seq 1 30); do
+      mount -t efs -o tls ${module.efs.file_system_id}:/ /mnt/efs && break
+      echo "efs mount retry $i..."; sleep 10
+    done || true
+    mountpoint -q /mnt/efs && mkdir -p /mnt/efs/guestbook/uploads
   EOT
 }
 
@@ -62,4 +67,7 @@ module "ec2" {
   key_name          = var.key_name
   user_data         = local.user_data
   associate_eip     = true
+
+  # EFS(마운트 타깃 포함)가 준비된 뒤 EC2가 부팅하도록 보장
+  depends_on = [module.efs]
 }
