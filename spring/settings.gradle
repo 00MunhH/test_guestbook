@@ -1,0 +1,12 @@
+rootProject.name = 'guestbook-cloud'
+
+// 인프라 서비스
+include 'discovery-server'
+include 'config-server'
+include 'api-gateway'
+
+// 비즈니스 서비스
+include 'guestbook-service'
+include 'auth-service'
+include 'social-service'
+include 'chat-service'

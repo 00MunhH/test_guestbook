@@ -1,0 +1,19 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          # classpath의 config/ 폴더를 설정 저장소로 사용 (운영은 git backend 권장)
+          search-locations: classpath:/config/
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

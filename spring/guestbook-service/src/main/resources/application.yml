@@ -1,0 +1,40 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: guestbook-service
+  config:
+    import: "optional:configserver:http://localhost:8888"
+  # 로컬 개발: H2 인메모리. 운영: PostgreSQL (환경변수로 override)
+  datasource:
+    url: jdbc:h2:mem:guestbook;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate.format_sql: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+---
+# 운영 프로파일 예시 (SPRING_PROFILES_ACTIVE=prod + 환경변수 주입)
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DATABASE_URL}        # jdbc:postgresql://<rds>:5432/guestbook
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate

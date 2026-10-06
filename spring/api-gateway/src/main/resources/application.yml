@@ -1,0 +1,44 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  config:
+    # Config 서버에서 공통 설정을 가져온다 (없어도 기동되도록 optional)
+    import: "optional:configserver:http://localhost:8888"
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false # 명시적 라우트만 사용
+      routes:
+        - id: guestbook-service
+          uri: lb://guestbook-service
+          predicates:
+            - Path=/api/guestbook/**
+          filters:
+            - StripPrefix=2   # /api/guestbook/entries -> /entries
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=2
+        - id: social-service
+          uri: lb://social-service
+          predicates:
+            - Path=/api/social/**
+          filters:
+            - StripPrefix=2
+        - id: chat-service
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - StripPrefix=2
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
