@@ -51,17 +51,51 @@ spring/
 - Eureka(Netflix), Spring Cloud Gateway, Spring Cloud Config
 - Spring Data JPA (로컬 H2 / 운영 PostgreSQL), Lombok
 
+## 사전 준비
+- **JDK 17** 설치 후 `JAVA_HOME` 환경변수 등록 (Windows 예시):
+  ```powershell
+  setx JAVA_HOME "C:\Program Files\Java\jdk-17.0.20.1"
+  setx PATH "%PATH%;%JAVA_HOME%\bin"
+  # 등록 후 터미널(창)을 새로 열어야 적용됩니다. 확인:
+  java -version
+  ```
+- Gradle은 별도 설치가 필요 없습니다. 저장소에 포함된 **Gradle Wrapper**(`gradlew` / `gradlew.bat`)를 사용합니다.
+
 ## 실행 순서 (로컬)
+
+각 `bootRun`은 서버가 계속 떠 있는 **포그라운드 명령**이라, 한 터미널에서 순차 실행하면 첫 명령에서 멈춥니다.
+**서비스마다 별도 터미널(창)을 열어** 아래 순서대로 실행하세요.
+
+- 디스커버리 → 설정 → 게이트웨이 → 비즈니스 서비스 순서
+
+**Windows (PowerShell)** — `.\gradlew.bat` 사용:
+```powershell
+cd C:\ai_project\20260930_TEST\spring
+# 터미널 1
+.\gradlew.bat :discovery-server:bootRun
+# 터미널 2
+.\gradlew.bat :config-server:bootRun
+# 터미널 3
+.\gradlew.bat :api-gateway:bootRun
+# 터미널 4
+.\gradlew.bat :guestbook-service:bootRun
+```
+
+**Linux / macOS** — `./gradlew` 사용:
 ```bash
 cd spring
-# 1) 디스커버리 → 2) 설정 → 3) 게이트웨이 → 4) 비즈니스 서비스 순으로
-./gradlew :discovery-server:bootRun
-./gradlew :config-server:bootRun
-./gradlew :api-gateway:bootRun
-./gradlew :guestbook-service:bootRun
+./gradlew :discovery-server:bootRun   # 터미널 1
+./gradlew :config-server:bootRun      # 터미널 2
+./gradlew :api-gateway:bootRun        # 터미널 3
+./gradlew :guestbook-service:bootRun  # 터미널 4
 ```
-- Eureka 대시보드: http://localhost:8761
+
+- Eureka 대시보드: http://localhost:8761 (서비스들이 등록되는지 확인)
 - 게이트웨이 경유 호출 예: `GET http://localhost:8080/api/guestbook/entries`
+- 첫 실행은 의존성 다운로드로 수 분 걸릴 수 있습니다.
+
+> 참고: 모든 서비스를 한 번에 종료하려면 각 터미널에서 `Ctrl + C`.
+> 전체를 한 터미널에서 백그라운드로 띄우려면 `Start-Process`(PowerShell)나 `&`(bash), 또는 Docker Compose 구성을 권장합니다.
 
 ## 구현 범위 안내
 이 저장소는 **인프라 서비스 3종(discovery/config/gateway) + guestbook-service를 완성 수준**으로 제공합니다.
